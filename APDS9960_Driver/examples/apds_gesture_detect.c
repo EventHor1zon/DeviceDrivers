@@ -14,7 +14,7 @@
 #include "port/interfaces/uart.h"
 #include "port/log.h"
 #include "port/interfaces/spi.h"
-#include "esp_system.h"
+#include "port/system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "GenericCommsDriver.h"

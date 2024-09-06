@@ -58,7 +58,7 @@ const char *CBUFF_TAG = "CBUFF";
 #include <sys/time.h>
 
 #ifdef CONFIG_USE_EVENTS
-#include "esp_event.h"
+#include "port/event.h"
 #endif
 
 /****** Function Prototypes ***********/
@@ -231,7 +231,7 @@ static void cbuffer_read_ll(CBuff handle, void *data, uint32_t len) {
 static status_t emit_nearfull_event(CBuff handle) {
 
     status_t err = STATUS_OK;
-    err = esp_event_post_to(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_NEARFULL, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
+    err = event_post(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_NEARFULL, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
     log_info("Posting nearful event %u\n\n", err);
     handle->event_settings.event_mask &= ~(CBUFF_EVENT_NEARFULL);
     return err;
@@ -241,7 +241,7 @@ static status_t emit_nearfull_event(CBuff handle) {
 static status_t emit_full_event(CBuff handle) {
 
     status_t err = STATUS_OK;
-    err = esp_event_post_to(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_FULL, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
+    err = event_post(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_FULL, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
     handle->event_settings.event_mask &= ~(CBUFF_EVENT_FULL);
     return err;
 }
@@ -250,7 +250,7 @@ static status_t emit_full_event(CBuff handle) {
 static status_t emit_overwrite_event(CBuff handle) {
 
     status_t err = STATUS_OK;
-    err = esp_event_post_to(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_OVERWRITE, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
+    err = event_post(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_OVERWRITE, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
     handle->event_settings.event_mask &= ~(CBUFF_EVENT_OVERWRITE);
     return err;
 }
@@ -258,7 +258,7 @@ static status_t emit_overwrite_event(CBuff handle) {
 
 static status_t emit_empty_event(CBuff handle) {
 
-    status_t err = esp_event_post_to(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_EMPTY, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
+    status_t err = event_post(handle->event_settings.loop, PM_EVENT_BASE, CBUFF_EVENTCODE_EMPTY, handle, sizeof(CBuff), pdMS_TO_TICKS(CONFIG_EVENTPOST_WAIT_MS));
     handle->event_settings.event_mask &= ~(CBUFF_EVENT_EMPTY);
     return err;
 }
@@ -330,7 +330,7 @@ CBuff cbuffer_create(CBuffer_init_t *init) {
 
 #ifdef CONFIG_USE_EVENTS
 
-status_t cbuffer_config_events(CBuff handle, bool use_events, esp_event_loop_handle_t loop, uint8_t event_flags, uint32_t nearfull_val) {
+status_t cbuffer_config_events(CBuff handle, bool use_events, event_loop_handle_t loop, uint8_t event_flags, uint32_t nearfull_val) {
 
     status_t err = STATUS_OK;
 

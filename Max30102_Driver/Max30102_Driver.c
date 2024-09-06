@@ -99,23 +99,23 @@ static TaskHandle_t taskhandle;
 #ifdef CONFIG_ENABLE_MAX31_EVENTS
 
 static status_t emit_fifo_almostfull_event(MAX31_h dev) {
-    return esp_event_post_to(dev->event_loop, 0, MAX31_EVENT_FIFO_ALMOST_FULL, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
+    return event_post(dev->event_loop, 0, MAX31_EVENT_FIFO_ALMOST_FULL, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
 }
 
 static status_t emit_ambient_overflow_event(MAX31_h dev) {
-    return esp_event_post_to(dev->event_loop, 0, MAX31_EVENT_AMBI_OVR, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
+    return event_post(dev->event_loop, 0, MAX31_EVENT_AMBI_OVR, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
 }
 
 static status_t emit_new_reddata_event(MAX31_h dev) {
-    return esp_event_post_to(dev->event_loop, 0, MAX31_EVENT_NEW_RED_DATA, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
+    return event_post(dev->event_loop, 0, MAX31_EVENT_NEW_RED_DATA, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
 }
 
 static status_t emit_new_irdata_event(MAX31_h dev) {
-    return esp_event_post_to(dev->event_loop, 0, MAX31_EVENT_NEW_IR_DATA, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
+    return event_post(dev->event_loop, 0, MAX31_EVENT_NEW_IR_DATA, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
 }
 
 static status_t emit_fifo_read_done_event(MAX31_h dev) {
-    return esp_event_post_to(dev->event_loop, 0, MAX31_EVENT_FIFO_READ_COMPLETE, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
+    return event_post(dev->event_loop, 0, MAX31_EVENT_FIFO_READ_COMPLETE, dev, sizeof(void *), pdMS_TO_TICKS(CONFIG_SHORTWAIT_MS));
 }
 
 #endif /** CONFIG_ENABLE_MAX31_EVENTS **/

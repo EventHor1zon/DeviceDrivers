@@ -129,7 +129,7 @@ static void re_driver_task(void *args) {
     
 #ifdef CONFIG_USE_EVENTS    
         if(re->use_events && event_value) {
-            esp_event_post_to(re->loop, 0, event_value, NULL, 0, pdMS_TO_TICKS(100));
+            event_post(re->loop, 0, event_value, NULL, 0, pdMS_TO_TICKS(100));
         }
 #endif
     }

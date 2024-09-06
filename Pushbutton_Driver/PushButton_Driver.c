@@ -19,7 +19,7 @@
 
 #include "port/driver/gpio.h"
 #include "port/log.h"
-#include "esp_event.h"
+#include "port/event.h"
 #include "port/malloc.h"
 
 #include "freertos/FreeRTOS.h"
@@ -106,7 +106,7 @@ static void btn_driver_task(void *args) {
                     if(btn->loop != NULL) {
                         uint32_t id = BTN_EVENT_BTNDOWN;
                         log_info("BTN", "Sending a btn down event (%u | 0x%08x)", id, id);
-                        esp_event_post_to(btn->loop, PM_EVENT_BASE, id, NULL, 0, pdMS_TO_TICKS(10));
+                        event_post(btn->loop, PM_EVENT_BASE, id, NULL, 0, pdMS_TO_TICKS(10));
                     }
     #endif /** CONFIG_USE_EVENTS **/
                 }
@@ -119,7 +119,7 @@ static void btn_driver_task(void *args) {
                     if(btn->loop != NULL) {
                         uint32_t id = BTN_EVENT_BTNUP;
                         log_info("BTN", "Sending a btn up event  (%u | 0x%08x)", id, id);
-                        esp_event_post_to(btn->loop, PM_EVENT_BASE, id, NULL, 0, pdMS_TO_TICKS(10));
+                        event_post(btn->loop, PM_EVENT_BASE, id, NULL, 0, pdMS_TO_TICKS(10));
                     }
     #endif /** CONFIG_USE_EVENTS **/
                 }

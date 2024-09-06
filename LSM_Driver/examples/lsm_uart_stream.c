@@ -13,7 +13,7 @@
 #include "port/interfaces/uart.h"
 #include "port/log.h"
 #include "port/interfaces/spi.h"
-#include "esp_system.h"
+#include "port/system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "GenericCommsDriver.h"
@@ -105,7 +105,7 @@ void app_main(void)
         log_error("MAIN", "Error starting PM");
     }
 
-    esp_event_loop_handle_t loop = pm_get_event_loop();
+    event_loop_handle_t loop = pm_get_event_loop();
 
 #endif
 

@@ -43,7 +43,7 @@
 LSM_DriverHandle_t *device = NULL;
 
 #ifdef CONFIG_USE_EVENTS
-#include "esp_event.h"
+#include "port/event.h"
 #endif
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
@@ -882,7 +882,7 @@ void LSMDriverTask(void *args)
                         log_info("LSM", "Got a fifo full interrupt");
 #ifdef CONFIG_USE_EVENTS
                         if (dev->use_events && dev->event_mask & LSM_EVENT_FIFO_FULL) {
-                            err = esp_event_post_to(
+                            err = event_post(
                                 dev->loop,
                                 PM_EVENT_BASE,
                                 LSM_EVENTCODE_FIFO_FULL,
@@ -902,7 +902,7 @@ void LSMDriverTask(void *args)
                         LSM_readFifoBlock(dev, &dev->settings.watermark);
 #ifdef CONFIG_USE_EVENTS
                         if (dev->use_events && dev->event_mask & LSM_EVENT_FIFO_THRESH) {
-                            err = esp_event_post_to(
+                            err = event_post(
                                 dev->loop,
                                 PM_EVENT_BASE,
                                 LSM_EVENTCODE_FIFO_THRESH,

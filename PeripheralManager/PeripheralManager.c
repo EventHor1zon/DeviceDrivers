@@ -11,7 +11,7 @@
 
 #include "port/error_type.h"
 #include "port/log.h"
-#include "esp_event.h"
+#include "port/event.h"
 #include "freertos/FreeRTOS.h"
 #include "PeripheralManager.h"
 #include "CommandAPI.h"
@@ -38,7 +38,7 @@ QueueHandle_t command_queue; /** < Handle for the main command queue **/
 STATUS_EVENT_DEFINE_BASE(PM_EVENT_BASE);
 
 event_map_t *event_map = NULL;
-esp_event_loop_handle_t pm_event_loop = NULL;
+event_loop_handle_t pm_event_loop = NULL;
 esp_event_handler_instance_t pm_event_instance = NULL;
 
 void pm_event_handler(void *args, esp_event_base_t base, int32_t id, void *event_args);
@@ -868,7 +868,7 @@ status_t add_event_map(event_map_init_t *map_init) {
 }
 
 
-esp_event_loop_handle_t pm_get_event_loop() {
+event_loop_handle_t pm_get_event_loop() {
     return pm_event_loop;
 }
 
