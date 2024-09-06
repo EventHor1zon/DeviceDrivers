@@ -20,7 +20,7 @@
 #include "port/interfaces/i2c.h"
 
 
-#include "esp_intr_alloc.h"
+#include "port/interrupts.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"

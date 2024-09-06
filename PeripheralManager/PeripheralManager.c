@@ -39,9 +39,9 @@ STATUS_EVENT_DEFINE_BASE(PM_EVENT_BASE);
 
 event_map_t *event_map = NULL;
 event_loop_handle_t pm_event_loop = NULL;
-esp_event_handler_instance_t pm_event_instance = NULL;
+event_handler_instance_t pm_event_instance = NULL;
 
-void pm_event_handler(void *args, esp_event_base_t base, int32_t id, void *event_args);
+void pm_event_handler(void *args, event_base_t base, int32_t id, void *event_args);
 
 static status_t event_loop_init(void);
 static event_map_t *find_event_map(uint32_t id);
@@ -90,7 +90,7 @@ static void pm_create_error_response(uint32_t error_code, char *err_msg, cmd_rsp
  *  \brief              Handles a 'parameter info' request. 
  *  \param request      pointer to the command request
  *  \param response     pointer to the command response 
- *  \return esp_ok or PM_ERROR type
+ *  \return status_ok or PM_ERROR type
  */
 static void pm_handle_param_info_request(uint8_t periph_id, uint8_t param_id, cmd_rsp_t *rsp);
 
@@ -99,7 +99,7 @@ static void pm_handle_param_info_request(uint8_t periph_id, uint8_t param_id, cm
  *  \brief              Handles a peripheral info request
  *  \param request      - pointer to the command request
  *  \param response     - pointer to the command response 
- *  \return esp_ok or PM_ERROR type
+ *  \return status_ok or PM_ERROR type
  */
 static void pm_handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp);
 
@@ -108,7 +108,7 @@ static void pm_handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp);
  *  \brief              Handles a 'device info' request. 
  *  \param request      - pointer to the command request
  *  \param response     - pointer to the command response 
- *  \return esp_ok or PM_ERROR type
+ *  \return status_ok or PM_ERROR type
  */
 static void pm_handle_device_info_request(cmd_rsp_t *rsp);
 
@@ -120,7 +120,7 @@ static void pm_handle_device_info_request(cmd_rsp_t *rsp);
  *                      with an error response. 
  *  \param request      - pointer to the command request
  *  \param response     - pointer to the command response 
- *  \return esp_ok or PM_ERROR type
+ *  \return status_ok or PM_ERROR type
  */
 static status_t handle_get_request(cmd_request_t *request, cmd_rsp_t *response);
 
@@ -132,7 +132,7 @@ static status_t handle_get_request(cmd_request_t *request, cmd_rsp_t *response);
  *                      with an error response. 
  *  \param request      - pointer to the command request
  *  \param response     - pointer to the command response 
- *  \return esp_ok or PM_ERROR type
+ *  \return status_ok or PM_ERROR type
  */
 static status_t handle_set_request(cmd_request_t *request, cmd_rsp_t *response);
 
@@ -142,7 +142,7 @@ static status_t handle_set_request(cmd_request_t *request, cmd_rsp_t *response);
  *                      action function associated with the parameter. 
  *  \param request      - pointer to the command request
  *  \param response     - pointer to the command response 
- *  \return esp_ok or PM_ERROR type
+ *  \return status_ok or PM_ERROR type
  */
 static status_t handle_invoke_request(cmd_request_t *request, cmd_rsp_t *response);
 
@@ -751,7 +751,7 @@ static cmd_rsp_t pm_process_stream(cmd_request_t *request) {
 
 
 
-void pm_event_handler(void *args, esp_event_base_t base, int32_t id, void *event_args) {
+void pm_event_handler(void *args, event_base_t base, int32_t id, void *event_args) {
     log_info(PM_TAG, "Got Event! %s id - {%u}\n", base, id);
     uint32_t val=0;
 
@@ -781,7 +781,7 @@ static status_t event_loop_init(void) {
 
     status_t err = STATUS_OK;
 
-    esp_event_loop_args_t loop_args = {
+    event_loop_args_t loop_args = {
         .queue_size = 5,
         .task_core_id = 0,
         .task_name = "pm_event_loop",
@@ -789,10 +789,10 @@ static status_t event_loop_init(void) {
         .task_stack_size = 5012,
     };
 
-    err = esp_event_loop_create(&loop_args, &pm_event_loop);
+    err = event_loop_create(&loop_args, &pm_event_loop);
 
     if(!err ) {
-        err = esp_event_handler_instance_register_with(pm_event_loop, PM_EVENT_BASE, STATUS_EVENT_ANY_ID, pm_event_handler, NULL, &pm_event_instance);
+        err = event_handler_instance_register_with(pm_event_loop, PM_EVENT_BASE, STATUS_EVENT_ANY_ID, pm_event_handler, NULL, &pm_event_instance);
     }
 
     return err;
