@@ -67,7 +67,17 @@ typedef enum {
     CBUFF_IO_TYPE_MAX,
 } cbuffer_data_io_t;
 
-
+typedef struct CBuffer_tasks {
+    bool is_complete;            /**< if task is complete - only used for single-run tasks **/
+    TaskHandle_t task_handle;    /**< handle for the task **/
+    cbuffer_task_t current_task; /**< the action to complete **/
+    cbuffer_data_io_t io_type;   /**< the io type **/
+    uint8_t io_bus;              /**< the io bus **/
+    uint32_t addr;               /**< an io address (optional) **/
+    uint32_t chunk_sz;           /**< size of data to dispatch **/
+    bool active;                 /**< the task is currently active **/
+    bool continuous;             /**< continuous task **/
+} cbuffer_task_settings_t;
 
 /**< member of packet structure **/
 typedef struct CBuffer_packet_member {

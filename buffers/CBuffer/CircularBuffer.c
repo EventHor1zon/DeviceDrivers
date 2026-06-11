@@ -32,7 +32,7 @@
  *
  **/
 
-#include "inc/CircularBuffer.h"
+#include "./inc/CircularBuffer.h"
 
 #ifdef CONFIG_USE_EVENTS
 #include "port/event.h"
@@ -52,7 +52,7 @@ TaskHandle_t receiveTaskHandle;
  *  \param incomming_sz number of bytes to be written
  *  \return boolean
  **/
-static bool buffer_will_overrun(CBuff handle, uint32_t incomming_sz);
+static uint8_t buffer_will_overrun(CBuff handle, uint32_t incomming_sz);
 
 /** \brief Number of free bytes left in buffer
  *  \param handle the cbuffer handle
@@ -62,7 +62,7 @@ static uint32_t buffer_free_bytes(CBuff handle);
 
 static uint32_t buffer_bytes_until_end(CBuff handle, bool read);
 
-static bool buffer_will_overwrite(CBuff handle, uint32_t incomming_sz);
+static uint8_t buffer_will_overwrite(CBuff handle, uint32_t incomming_sz);
 
 static void cbuffer_write_ll(CBuff handle, void *data, uint32_t length);
 
@@ -85,14 +85,14 @@ static void *__memcpy(void *dest, void *source, size_t size) __attribute__((weak
 }
 
 /** this write will overwrite unread data **/
-static inline bool buffer_will_overwrite(CBuff handle, uint32_t incomming_sz)
+static inline uint8_t buffer_will_overwrite(CBuff handle, uint32_t incomming_sz)
 {
     uint32_t freebytes = buffer_free_bytes(handle);
     return incomming_sz > freebytes;
 }
 
 /** buffer write will run past the buffer end - pointers need to be moved **/
-static inline bool buffer_will_overrun(CBuff handle, uint32_t incomming_sz)
+static inline uint8_t buffer_will_overrun(CBuff handle, uint32_t incomming_sz)
 {
     return ((handle->write_ptr + incomming_sz) > handle->buffer_end);
 }
@@ -232,34 +232,20 @@ static status_t emit_empty_event(CBuff handle)
 
 /****** Global Functions *************/
 
-CBuff cbuffer_create(CBuffer_init_t *init)
+CBuff cbuffer_create(CBuffer_Handle_t *handle, CBuffer_init_t *init)
 {
-    CBuff handle = NULL;
-    void *buffer = init->;
     status_t err = STATUS_OK;
 
-    handle->buffer_start = buffer;
-    handle->buffer_end = (buffer + init->size);
-    handle->write_ptr = buffer;
-    handle->read_ptr = buffer;
+    handle->buffer_start = init->buffer;
+    handle->buffer_end = (init->buffer + init->size);
     handle->buffer_len = init->size;
-    handle->data_len = 0;
+    handle->sem = init->sem;
+
+    handle->write_ptr = handle->buffer_start;
+    handle->read_ptr = handle->buffer_start;
     handle->allow_overwrite = init->allow_ovr;
-    handle->is_claimed = false;
-    handle->sem = sem;
-}
 
-if (err != STATUS_OK) {
-    if (buffer != NULL) {
-        heap_caps_free(buffer);
-    }
-    if (handle != NULL) {
-        heap_caps_free(handle);
-    }
-    log_error(CBUFF_TAG, "Error creating CBuffer!");
-}
-
-return handle;
+    return handle;
 }
 
 #ifdef CONFIG_USE_EVENTS
@@ -309,21 +295,21 @@ status_t cbuffer_set_event_mask(CBuff handle, uint8_t event_mask)
 
 #endif
 
-status_t cbuffer_write(CBuff handle, void *data, uint32_t wrt_len)
+status_t cbuffer_write(CBuff handle, void *const data, uint32_t *wrt_len)
 {
     if (wrt_len > handle->buffer_len) {
         return STATUS_ERR_INVALID_ARG;
     }
-    if (data == NULL || handle == NULL) {
+    if (!data || !handle) {
         return STATUS_ERR_NO_MEM;
     }
     if (handle->sem && xSemaphoreTake(handle->sem, pdMS_TO_TICKS(CBUFFER_SEM_WAIT_MS)) != pdTRUE) {
         return STATUS_ERR_TIMEOUT;
     }
 
-    uint32_t _len = (buffer_will_overwrite(handle, wrt_len) && !handle->allow_overwrite)
+    uint32_t _len = (buffer_will_overwrite(handle, *wrt_len) && !handle->allow_overwrite)
                         ? buffer_free_bytes(handle)
-                        : wrt_len;
+                        : *wrt_len;
 
     cbuffer_write_ll(handle, data, _len);
 
@@ -353,27 +339,27 @@ status_t cbuffer_write(CBuff handle, void *data, uint32_t wrt_len)
     if (handle->sem) {
         xSemaphoreGive(handle->sem);
     }
-    return STATUS_OK
+    *wrt_len = _len;
+    return STATUS_OK;
 }
 
-status_t cbuffer_read(CBuff handle, void *buffer, uint32_t *length)
+status_t cbuffer_read(CBuff handle, void *const buffer, uint32_t *length)
 {
-    uint32_t unread = buffer_unread_bytes(handle);
-    if (*length > unread) {
-        return STATUS_ERR_INVALID_ARG
-    } else if (buffer == NULL) {
+    if (!buffer) {
         return STATUS_ERR_NO_MEM;
-    } else if (
-        handle->sem && xSemaphoreTake(handle->sem, pdMS_TO_TICKS(CBUFFER_SEM_WAIT_MS)) != pdTRUE) {
+    }
+    if (handle->sem && xSemaphoreTake(handle->sem, pdMS_TO_TICKS(CBUFFER_SEM_WAIT_MS)) != pdTRUE) {
         return STATUS_ERR_TIMEOUT;
     }
 
-    if (!ret) {
-        cbuffer_read_ll(handle, buffer, length);
-        if (handle->sem) {
-            xSemaphoreGive(handle->sem)
-        };
-    }
+    uint32_t unread = buffer_unread_bytes(handle);
+    uint32_t _len = (*length > unread) ? unread : *length;
+
+    cbuffer_read_ll(handle, buffer, _len);
+
+    if (handle->sem) {
+        xSemaphoreGive(handle->sem);
+    };
 
 #ifdef CONFIG_USE_EVENTS
 
@@ -384,6 +370,6 @@ status_t cbuffer_read(CBuff handle, void *buffer, uint32_t *length)
     }
 
 #endif
-
-    return ret;
+    *length = _len;
+    return STATUS_OK;
 }
