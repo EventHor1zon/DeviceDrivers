@@ -14,14 +14,6 @@
 #include <stdint.h>
 
 /********* Definitions *****************/
-
-#define CBUFFER_MAX_BUFFER_SIZE 8192
-#define CBUFFER_CHUNK_READ_SIZE 256
-
-#define CBUFFER_CONFIG_DISPATCH_YIELD_MS 5
-#define CBUFFER_CONFIG_WAIT_PKT_MS       50
-#define CBUFFER_CONFIG_RX_QUEUE_LEN      8
-
 #define CBUFFER_SEM_WAIT_MS 100
 
 #ifdef CONFIG_USE_EVENTS

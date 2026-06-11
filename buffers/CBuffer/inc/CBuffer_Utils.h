@@ -13,6 +13,15 @@
 #define CBUFFER_MAX_NAME_LENGTH             24
 #define CBUFF_MAX_SEP_BYTES                 8
 #define CBUFFER_MAX_PACKET_SIZE_BYTES       256
+
+
+#define CBUFFER_CONFIG_DISPATCH_YIELD_MS 5
+
+#define CBUFFER_MAX_BUFFER_SIZE     8192
+#define CBUFFER_CHUNK_READ_SIZE     256
+#define CBUFFER_CONFIG_WAIT_PKT_MS  50
+#define CBUFFER_CONFIG_RX_QUEUE_LEN 8
+
 /********* Definitions *****************/
 
 /** the CBuffer Data read task queue **/
