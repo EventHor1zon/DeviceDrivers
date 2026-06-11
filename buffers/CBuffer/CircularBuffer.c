@@ -34,29 +34,14 @@
 
 #include "./inc/CircularBuffer.h"
 
+#include <stddef.h>
 #ifdef CONFIG_USE_EVENTS
 #include "port/event.h"
 #endif
 
 /****** Function Prototypes ***********/
 
-TaskHandle_t receiveTaskHandle;
-
-// static bool buffer_is_full(CBuff handle);
-
-// static bool buffer_is_empty(CBuff handle);
-
-/** \brief writing length of data to buffer will overrun the end
- *          of the bufferm circling back to the start
- *  \param handle the cbuffer handle
- *  \param incomming_sz number of bytes to be written
- *  \return boolean
- **/
-static uint8_t buffer_will_overrun(CBuff handle, uint32_t incomming_sz);
-
 static uint32_t buffer_free_bytes(CBuff handle);
-
-static uint32_t buffer_bytes_until_end(CBuff handle, bool read);
 
 static uint8_t buffer_will_overwrite(CBuff handle, uint32_t incomming_sz);
 
@@ -108,54 +93,55 @@ static inline uint8_t buffer_will_overwrite(CBuff handle, uint32_t incomming_sz)
     return incomming_sz > buffer_free_bytes(handle);
 }
 
-/** \return Non-zero if buffer write will run past the buffer end**/
-static inline uint8_t buffer_will_overrun(CBuff handle, uint32_t incomming_sz)
+/** \return bytes from write pointer to end of buffer **/
+static inline uint32_t buffer_write_bytes_until_end(CBuff handle)
 {
-    return ((handle->write_ptr + incomming_sz) > handle->buffer_end);
+    return handle->buffer_end - handle->write_ptr;
 }
 
-/** bytes from pointer to end of buffer **/
-static uint32_t buffer_bytes_until_end(CBuff handle, bool read)
+/** \return bytes from read pointer to end of buffer */
+static inline uint32_t buffer_read_bytes_until_end(CBuff handle)
 {
-    uint32_t bytes = 0;
-    if (read) {
-        bytes = handle->buffer_end - handle->read_ptr;
-    } else {
-        bytes = handle->buffer_end - handle->write_ptr;
-    }
-    return bytes;
+    return handle->buffer_end - handle->read_ptr;
 }
 
-/** write data of length - will follow circular write & increment the write handle **/
-static void cbuffer_write_ll(CBuff handle, void *data, uint32_t length)
+/** \brief write data of length - will follow circular write
+ *          & increment the write handle **/
+static void cbuffer_write_ll(CBuff handle, void *data, uint32_t len)
 {
-    if (buffer_will_overrun(handle, length)) {
-        uint32_t first_write = buffer_bytes_until_end(handle, 0);
-        __memcpy(handle->write_ptr, data, first_write);
+    uint8_t *dest = data;
+    if (len > buffer_write_bytes_until_end(handle)) {
+        /** write the first chunk into the cbuffer */
+        __memcpy(handle->write_ptr, dest, buffer_write_bytes_until_end(handle));
+        /** update pointers and length for next write */
         handle->write_ptr = handle->buffer_start;
-        _memcpy(handle->write_ptr, (data + first_write), (length - first_write));
-        assert(length > first_write);
-        handle->write_ptr += (length - first_write);
-    } else {
-        _memcpy(handle->write_ptr, data, length);
-        handle->write_ptr += length;
+        len -= buffer_write_bytes_until_end(handle);
+        dest += buffer_write_bytes_until_end(handle);
     }
-    return;
+
+    _memcpy(handle->write_ptr, dest, len);
+    handle->write_ptr += len;
 }
 
-/** read data of length **/
+/**
+ * \brief read len data from cbuffer into data pointer
+ *        This function follows the circular data and increments
+ *        read pointer
+ */
 static void cbuffer_read_ll(CBuff handle, void *data, uint32_t len)
 {
-    uint32_t bytes_until_end = buffer_bytes_until_end(handle, 1);
-    if (len > bytes_until_end) {
-        _memcpy(data, handle->read_ptr, bytes_until_end);
+    uint8_t *dest = data;
+    if (len > buffer_read_bytes_until_end(handle)) {
+        /** write the first chunk into the data buffer */
+        _memcpy(dest, handle->read_ptr, buffer_read_bytes_until_end(handle));
+        /** update the pointers and length for second read */
         handle->read_ptr = handle->buffer_start;
-        _memcpy((data + bytes_until_end), handle->read_ptr, (len - bytes_until_end));
-        handle->read_ptr += (len - bytes_until_end);
-    } else {
-        _memcpy(data, handle->read_ptr, len);
-        handle->read_ptr += len;
+        len -= buffer_read_bytes_until_end(handle);
+        dest += buffer_read_bytes_until_end(handle);
     }
+
+    _memcpy(dest, handle->read_ptr, len);
+    handle->read_ptr += len;
 }
 
 #ifdef CONFIG_USE_EVENTS
@@ -369,7 +355,7 @@ status_t cbuffer_read(CBuff handle, void *const buffer, uint32_t *length)
     return STATUS_OK;
 }
 
-uint32_t cbuffer_unread(CBuff handle)
+uint32_t cbuffer_unread_bytes(CBuff handle)
 {
     return buffer_unread_bytes(handle);
 }

@@ -150,6 +150,10 @@ status_t cbuffer_reset_pointers(CBuff handle);
  **/
 status_t cbuffer_reset_buffer(CBuff handle);
 
+uint32_t cbuffer_unread_bytes(CBuff handle);
+
+uint32_t cbuffer_available_space(CBuff handle);
+
 #ifdef CONFIG_USE_EVENTS
 /**
  * \brief configure the event settings
