@@ -96,8 +96,6 @@ typedef struct CBuffer_init {
 
 /******** Function Definitions *********/
 
-uint32_t buffer_unread_bytes(CBuff handle);
-
 /**
  * \brief: Allocate a new circular buffer controller
  * \param handle - pointer to a CBuffer_Handle_t struct
@@ -108,18 +106,25 @@ CBuff cbuffer_create(CBuffer_Handle_t *handle, CBuffer_init_t *init);
 
 /**
  * \brief: write data to the buffer
+ *          If write length would overwrite unread data and
+ *          overwrites are not enabled, the write length
+ *          will be the available number of bytes
  * \param handle - ptr to the cbuffer handle
  * \param data -  const ptr to the data to write
- * \param length - length of data (in bytes) to write
+ * \param wrt_len [in] pointer to length of data (in bytes) to write
+ *               [out] length of data written
  * \return ESP_OK or error
  **/
 status_t cbuffer_write(CBuff handle, void *const data, uint32_t *wrt_len);
 
 /**
  * \brief: read data from the buffer
+ *          if read length greater than number of unread bytes
+ *          then read length will be number of unread bytes
  * \param handle - ptr to the cbuffer handle
  * \param buffer - ptr to read data into
- * \param length - length of data (in bytes) to read
+ * \param length [in] length of data (in bytes) to read
+ *               [out] length of data read (in bytes)
  * \return ESP_OK or error
  **/
 status_t cbuffer_read(CBuff handle, void *const buffer, uint32_t *length);

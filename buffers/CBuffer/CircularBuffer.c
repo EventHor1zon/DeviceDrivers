@@ -54,10 +54,6 @@ TaskHandle_t receiveTaskHandle;
  **/
 static uint8_t buffer_will_overrun(CBuff handle, uint32_t incomming_sz);
 
-/** \brief Number of free bytes left in buffer
- *  \param handle the cbuffer handle
- *  \return number of free bytes
- **/
 static uint32_t buffer_free_bytes(CBuff handle);
 
 static uint32_t buffer_bytes_until_end(CBuff handle, bool read);
@@ -84,21 +80,8 @@ static void *__memcpy(void *dest, void *source, size_t size) __attribute__((weak
     return dest;
 }
 
-/** this write will overwrite unread data **/
-static inline uint8_t buffer_will_overwrite(CBuff handle, uint32_t incomming_sz)
-{
-    uint32_t freebytes = buffer_free_bytes(handle);
-    return incomming_sz > freebytes;
-}
-
-/** buffer write will run past the buffer end - pointers need to be moved **/
-static inline uint8_t buffer_will_overrun(CBuff handle, uint32_t incomming_sz)
-{
-    return ((handle->write_ptr + incomming_sz) > handle->buffer_end);
-}
-
-/** bytes available between write and read pointer **/
-inline uint32_t buffer_free_bytes(CBuff handle)
+/** \return Number of free bytes left in buffer **/
+static inline uint32_t buffer_free_bytes(CBuff handle)
 {
     uint32_t free = (handle->write_ptr > handle->read_ptr) ?  // if write pointer is ahead of
                                                               // read...
@@ -109,7 +92,7 @@ inline uint32_t buffer_free_bytes(CBuff handle)
     return free;
 }
 
-/** bytes available between read and write pointers **/
+/** \return bytes available between read and write pointers **/
 inline uint32_t buffer_unread_bytes(CBuff handle)
 {
     uint32_t avail =
@@ -117,6 +100,18 @@ inline uint32_t buffer_unread_bytes(CBuff handle)
              (handle->buffer_end - handle->read_ptr) + ((handle->write_ptr) - handle->buffer_start))
                                               : (handle->write_ptr - handle->read_ptr));
     return avail;
+}
+
+/** \return Non-zero if write will overwrite unread data **/
+static inline uint8_t buffer_will_overwrite(CBuff handle, uint32_t incomming_sz)
+{
+    return incomming_sz > buffer_free_bytes(handle);
+}
+
+/** \return Non-zero if buffer write will run past the buffer end**/
+static inline uint8_t buffer_will_overrun(CBuff handle, uint32_t incomming_sz)
+{
+    return ((handle->write_ptr + incomming_sz) > handle->buffer_end);
 }
 
 /** bytes from pointer to end of buffer **/
@@ -372,4 +367,14 @@ status_t cbuffer_read(CBuff handle, void *const buffer, uint32_t *length)
 #endif
     *length = _len;
     return STATUS_OK;
+}
+
+uint32_t cbuffer_unread(CBuff handle)
+{
+    return buffer_unread_bytes(handle);
+}
+
+uint32_t cbuffer_available_space(CBuff handle)
+{
+    return buffer_free_bytes(handle);
 }
