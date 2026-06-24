@@ -45,6 +45,13 @@ status_t spi_read(const uint32_t spi_port, uint8_t *const data);
  */
 status_t spi_transfer(const uint32_t spi_port, const uint8_t tx_data, uint8_t *const rx_data);
 
+/** @brief perform a full spi transaction with user args
+ *  @param spi_port [in] SPI port index
+ *  @param args [in] pointer to args
+ *  @return status_t status
+ */
+status_t spi_transaction(const uint32_t spi_port, const void *const args);
+
 /** @brief write multiple bytes to spi
  *  @param spi_port [in] SPI port index
  *  @param data [in] pointer to source data
@@ -67,6 +74,14 @@ status_t spi_burst_read(const uint32_t spi_port, uint8_t *const data, const uint
  *  @return status_t status
  */
 status_t spi_init(const uint32_t spi_port, void *const args);
+
+/** @brief initialise a device on an spi port
+ *  @param spi_port [in] SPI port index
+ *  @param args [in] pointer to init arguments
+ *  @param returned [out] pointer to return data
+ *  @return status_t status
+ */
+status_t spi_init_device(const uint32_t spi_port, const void *const args, void *const returned);
 
 /** END **/
 #endif /** PORT_SPI_H **/

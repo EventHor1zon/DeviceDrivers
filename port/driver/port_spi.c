@@ -38,6 +38,11 @@ spi_transfer(const uint32_t spi_port, const uint8_t tx_data, uint8_t *const rx_d
     return STATUS_NOT_IMPLEMENTED;
 }
 
+status_t __attribute__((weak)) spi_transaction(const uint32_t spi_port, const void *const args)
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
 status_t __attribute__((weak))
 spi_burst_write(const uint32_t spi_port, const uint8_t *const data, const uint32_t len)
 {
