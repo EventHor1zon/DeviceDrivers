@@ -48,9 +48,10 @@ status_t spi_transfer(const uint32_t spi_port, const uint8_t tx_data, uint8_t *c
 /** @brief perform a full spi transaction with user args
  *  @param spi_port [in] SPI port index
  *  @param args [in] pointer to args
+ *  @param timeout [in] timeout for operation
  *  @return status_t status
  */
-status_t spi_transaction(const uint32_t spi_port, const void *const args);
+status_t spi_transaction(const uint32_t spi_port, const void *const args, const uint32_t timeout);
 
 /** @brief write multiple bytes to spi
  *  @param spi_port [in] SPI port index

@@ -65,6 +65,48 @@ status_t i2c_burst_read(
     uint8_t *const data,
     const uint32_t len);
 
+/** @brief write multiple bytes to i2c device 8-bit register address
+ *         (the default is 8-bit register address)
+ *  @param i2c_port [in] I2C port index
+ *  @param address [in] slave address
+ *  @param data [in] pointer to source data
+ *  @param len [in] number of bytes to write
+ *  @return status_t status
+ */
+status_t i2c_register_write(
+    const uint32_t i2c_port,
+    const uint8_t ic_address,
+    const uint8_t reg,
+    uint32_t *const len,
+    const uint8_t *const data);
+
+/** @brief read multiple bytes to i2c device 8-bit register address
+ *  @param i2c_port [in] I2C port index
+ *  @param address [in] slave address
+ *  @param data [in] pointer to source data
+ *  @param len [in] number of bytes to write
+ *  @return status_t status
+ */
+status_t i2c_register_read(
+    const uint32_t i2c_port,
+    const uint8_t ic_address,
+    const uint8_t reg,
+    uint32_t *const len,
+    uint8_t *const buffer);
+
+/** @brief read multiple bytes from i2c device
+ *  @param i2c_port [in] I2C port index
+ *  @param address [in] slave address
+ *  @param data [out] pointer to destination buffer
+ *  @param len [in] number of bytes to read
+ *  @return status_t status
+ */
+status_t i2c_burst_read(
+    const uint32_t i2c_port,
+    const uint32_t address,
+    uint8_t *const data,
+    const uint32_t len);
+
 /** @brief read/write multiple bytes from i2c device
  *  @param i2c_port [in] I2C port index
  *  @param address [in] slave address

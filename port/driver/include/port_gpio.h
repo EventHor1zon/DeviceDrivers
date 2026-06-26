@@ -95,7 +95,7 @@ status_t gpio_set_pull_direction(
  *  @param args [in] pointer to init arguments
  *  @return status_t status
  */
-status_t gpio_init(const uint32_t gpio_port, const uint32_t gpio_pin, void *const args);
+status_t gpio_init(const uint32_t gpio_port, const uint32_t gpio_pin, const void *const args);
 
 /** END **/
 #endif /** PORT_GPIO_H **/

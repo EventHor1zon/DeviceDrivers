@@ -38,7 +38,8 @@ spi_transfer(const uint32_t spi_port, const uint8_t tx_data, uint8_t *const rx_d
     return STATUS_NOT_IMPLEMENTED;
 }
 
-status_t __attribute__((weak)) spi_transaction(const uint32_t spi_port, const void *const args)
+status_t __attribute__((weak))
+spi_transaction(const uint32_t spi_port, const void *const args, const uint32_t timeout)
 {
     return STATUS_NOT_IMPLEMENTED;
 }

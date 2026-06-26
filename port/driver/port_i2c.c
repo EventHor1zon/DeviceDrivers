@@ -52,6 +52,26 @@ status_t __attribute__((weak)) i2c_burst_read(
     return STATUS_NOT_IMPLEMENTED;
 }
 
+status_t __attribute__((weak)) i2c_register_write(
+    const uint32_t i2c_port,
+    const uint8_t ic_address,
+    const uint8_t reg,
+    uint32_t *const len,
+    const uint8_t *const data)
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+status_t __attribute__((weak)) i2c_register_read(
+    const uint32_t i2c_port,
+    const uint8_t ic_address,
+    const uint8_t reg,
+    uint32_t *const len,
+    uint8_t *const buffer)
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
 status_t __attribute__((weak)) i2c_transact(
     const uint32_t i2c_port,
     const uint32_t address,
