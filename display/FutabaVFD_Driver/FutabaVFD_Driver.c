@@ -350,11 +350,6 @@ VFD_HANDLE vfd_init(VFD_HANDLE handle, vfd_init_t *init)
     spi_device_handle_t dev_handle = NULL;
     gpio_config_t ioconf = {0};
 
-    if (!gcd_spi_check_bus(init->spi_bus)) {
-        log_error(VFD_TAG, "Error invalid SPI bus");
-        err = STATUS_ERR_INVALID_ARG;
-    }
-
     if (!err) {
 #ifdef CONFIG_DRIVERS_USE_HEAP
         VFD_HANDLE handle = NULL;
