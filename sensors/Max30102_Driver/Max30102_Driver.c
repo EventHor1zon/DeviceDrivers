@@ -30,7 +30,7 @@
 #include "Max30102_Driver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "port/error_type.h"
+#include "port/error_types.h"
 #include "port/port_log.h"
 #include "port/port_malloc.h"
 

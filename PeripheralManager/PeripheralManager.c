@@ -11,7 +11,7 @@
 #include "GenericCommsDriver.h"
 #include "PeripheralManager.h"
 #include "freertos/FreeRTOS.h"
-#include "port/error_type.h"
+#include "port/error_types.h"
 #include "port/event.h"
 #include "port/port_log.h"
 

@@ -12,7 +12,7 @@
 #include "GenericCommsDriver.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "port/error_type.h"
+#include "port/error_types.h"
 #include "port/interfaces/i2c.h"
 #include "port/interfaces/spi.h"
 #include "port/interfaces/uart.h"

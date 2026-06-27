@@ -13,7 +13,7 @@
 
 /********* Includes *******************/
 #include "CircularBuffer.h"
-#include "port/error_type.h"
+#include "port/error_types.h"
 
 #include <stdio.h>
 #include <stdlib.h>

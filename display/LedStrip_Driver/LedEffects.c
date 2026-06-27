@@ -25,7 +25,7 @@
 #include "Utilities.h"
 #include "inc/LedEffects.h"
 #include "inc/LedStrip_Driver.h"
-#include "port/error_type.h"
+#include "port/error_types.h"
 #include "port/port_log.h"
 #include "port/port_types.h"
 

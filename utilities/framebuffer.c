@@ -37,7 +37,7 @@
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
 #include "math.h"
-#include "port/error_type.h"
+#include "port/error_types.h"
 #include "port/port_log.h"
 #include "port/port_malloc.h"
 #include "port/port_types.h"

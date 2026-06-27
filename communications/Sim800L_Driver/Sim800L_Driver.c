@@ -9,7 +9,7 @@
 
 /********* Includes *******************/
 #include "SIM800L_Driver.h"
-#include "port/error_type.h"
+#include "port/error_types.h"
 #include "port/interfaces/uart.h"
 #include "port/malloc_init.h"
 #include "port/port_log.h"
