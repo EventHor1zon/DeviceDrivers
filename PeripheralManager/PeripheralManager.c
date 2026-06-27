@@ -179,8 +179,8 @@ static bool set_within_limits(periph_cmd_t *cmd, parameter_t *param)
     {
         return cmd->data.sint_data > param->max_valid;
     } else if (
-        cmd->data_t == DATATYPE_INT8 || cmd->data_t == DATATYPE_INT16
-        || cmd->data_t == DATATYPE_INT32 || cmd->data_t == DATATYPE_BOOL)
+        cmd->data_t == DATATYPE_UINT8 || cmd->data_t == DATATYPE_UINT16
+        || cmd->data_t == DATATYPE_UINT32 || cmd->data_t == DATATYPE_BOOL)
     {
         return cmd->data.uint_data > param->max_valid;
     } else if (cmd->data_t == DATATYPE_STRING) {
@@ -568,7 +568,6 @@ static void pm_command_task(void *args)
         if (xQueueReceive(command_queue, &incomming, portMAX_DELAY) != pdPASS) {
             ;
         }
-        log_info("PM", "PM Task");
         /** process peripheral command **/
         if (incomming.cmd_type == REQ_PKT_TYPE_PERIPH_CMD) {
             outgoing = pm_handle_periph_cmd(&incomming);
@@ -589,7 +588,7 @@ static void pm_command_task(void *args)
         }
 
         /** send the response to API manager **/
-        log_info(PM_TAG, "Sending response (type: %u)", outgoing.rsp_type);
+        log_verbose(PM_TAG, "Sending response (type: %u)", outgoing.rsp_type);
 
         outgoing.rsp_args = incomming.rsp_args;
 
@@ -898,61 +897,13 @@ status_t peripheral_manager_init(pm_init_t *init_data)
         initStatus = STATUS_ERR_INVALID_ARG;
     }
 
-    /** peripheral init code goes here **/
-    /** use a random peripheral to check process **/
-    if (init_data->init_i2c) {
-        initStatus = gcd_i2c_init(
-            init_data->sda,
-            init_data->scl,
-            init_data->i2c_speed,
-            init_data->i2c_channel,
-            false);
-        if (initStatus != STATUS_OK) {
-            log_error(PM_TAG, "Error intialising I2C bus");
-        }
-    }
-
-    if (init_data->init_spi) {
-        initStatus = gcd_spi_init(
-            init_data->sck,
-            init_data->mosi,
-            init_data->miso,
-            init_data->spi_channel,
-            false);
-        if (initStatus != STATUS_OK) {
-            log_error(PM_TAG, "Error intialising SPI bus");
-        }
-    }
-
-    if (init_data->init_uart) {
-        initStatus = gcd_uart_init(
-            init_data->uart_channel,
-            init_data->uart_tx,
-            init_data->uart_rx,
-            init_data->uart_cts,
-            init_data->uart_rts,
-            init_data->uart_baud,
-            1,
-            0);
-        if (initStatus != STATUS_OK) {
-            log_error(PM_TAG, "Error intialising SPI bus");
-        }
-    }
-
-    if (init_data->init_gpio_isr) {
-        initStatus = gpio_install_isr_service(PM_CONFIG_GPIO_ISR_PRIO);
-        if (initStatus != STATUS_OK) {
-            log_error(PM_TAG, "Error intialising GPIO ISR service!");
-        }
-    }
-
-    if (command_queue)
-
+    if (command_queue) {
         if (xTaskCreatePinnedToCore(pm_command_task, "pm_command_task", 5012, NULL, 6, NULL, 0)
             != pdTRUE) {
             log_error(PM_TAG, "Error creating control task");
             initStatus = STATUS_ERR_NO_MEM;
         }
+    }
 
 #ifdef CONFIG_ENABLE_STREAM
     initStatus = stream_init();
