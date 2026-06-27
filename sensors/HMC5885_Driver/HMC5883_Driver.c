@@ -20,8 +20,8 @@
 #include "freertos/task.h"
 #include "port/driver/gpio.h"
 #include "port/error_type.h"
-#include "port/log.h"
-#include "port/types.h"
+#include "port/port_log.h"
+#include "port/port_types.h"
 
 const static int8_t HMC_CONFIG_INTR_LEVEL = STATUS_INTR_FLAG_LEVEL3;
 

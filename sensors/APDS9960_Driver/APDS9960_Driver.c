@@ -19,8 +19,8 @@
 #include "freertos/task.h"
 #include "port/driver/gpio.h"
 #include "port/error_type.h"
-#include "port/log.h"
-#include "port/malloc.h"
+#include "port/port_log.h"
+#include "port/port_malloc.h"
 
 #include <stdint.h>
 #include <string.h>

@@ -74,7 +74,7 @@ status_t spi_burst_read(const uint32_t spi_port, uint8_t *const data, const uint
  *  @param args [in] pointer to init arguments
  *  @return status_t status
  */
-status_t spi_init(const uint32_t spi_port, void *const args);
+status_t spi_init(const uint32_t spi_port, const void *const args);
 
 /** @brief initialise a device on an spi port
  *  @param spi_port [in] SPI port index

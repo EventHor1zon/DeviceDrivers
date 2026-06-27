@@ -1,18 +1,20 @@
 /******************************************************/ /**
- *  @file main.c
- *  
- *  @brief main application file for ESPHome
- * 
- *********************************************************/
+                                                          *  @file main.c
+                                                          *
+                                                          *  @brief main application file for
+                                                          *ESPHome
+                                                          *
+                                                          *********************************************************/
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "nvs_flash.h"
+#include "port/interfaces/spi.h"
+#include "port/system.h"
+#include "sdkconfig.h"
 
 #include <stdio.h>
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "port/system.h"
-#include "port/interfaces/spi.h"
-#include "nvs_flash.h"
-#include "sdkconfig.h"
 // #include "../components/TestComponent/TestComponent.h"
 // #include "../components/SSD1306_Driver/SSD1306_Driver.h"
 // #include "../components/LedStrip_Driver/LedStrip_Driver.h"
@@ -20,26 +22,23 @@
 // #include "../components/Max30102_Driver/Max30102_Driver.h"
 #include "../components/FutabaVFD_Driver/FutabaVFD_Driver.h"
 #include "main.h"
-#include "port/log.h"
+#include "port/port_log.h"
 // #include "WifiDriver.h"
 #include "PeripheralManager.h"
 #include "Utilities.h"
 
-
 void app_main(void)
 {
-
-        //Initialize NVS
+    // Initialize NVS
     status_t ret = nvs_flash_init();
     if (ret == STATUS_ERR_NVS_NO_FREE_PAGES || ret == STATUS_ERR_NVS_NEW_VERSION_FOUND) {
-      STATUS_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
+        STATUS_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
     }
 
     // wifi_init_sta();
 
     STATUS_ERROR_CHECK(ret);
-
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
     log_info("MAIN", "Config use periph manager is enabled");
@@ -66,17 +65,12 @@ void app_main(void)
 
     ret = peripheral_manager_init(&pm_init);
 
-    if(ret != STATUS_OK) {
+    if (ret != STATUS_OK) {
         log_error("MAIN", "Error starting PM");
     }
 #endif
 
-    vfd_init_t init = {
-        .clock_speed = 100000,
-        .cs_pin = 12,
-        .rst_pin = 14,
-        .spi_bus = VSPI_HOST
-    };
+    vfd_init_t init = {.clock_speed = 100000, .cs_pin = 12, .rst_pin = 14, .spi_bus = VSPI_HOST};
 
     vfd_handle_t dev;
 
@@ -85,15 +79,14 @@ void app_main(void)
     uint8_t counter = 0, sub = 0;
 
     uint8_t frames[5][5] = {
-        {0b1010101,0,0,0,0},
-        {0,0b1010101,0,0,0},
-        {0,0,0b1010101,0,0},
-        {0,0,0,0b1010101,0},
-        {0,0,0,0,0b1010101}
-    };
-    
-    for(uint8_t i=0; i<5; i++) {
-        vfd_set_current_cgram_page(dev_ptr, &i);        
+        {0b1010101, 0, 0, 0, 0},
+        {0, 0b1010101, 0, 0, 0},
+        {0, 0, 0b1010101, 0, 0},
+        {0, 0, 0, 0b1010101, 0},
+        {0, 0, 0, 0, 0b1010101}};
+
+    for (uint8_t i = 0; i < 5; i++) {
+        vfd_set_current_cgram_page(dev_ptr, &i);
         vfd_load_custom_segment(dev_ptr, &frames[i][0]);
         vfd_display_custom_segment(dev_ptr, &i);
     }
@@ -110,28 +103,25 @@ void app_main(void)
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    while (1)
-    {
-
+    while (1) {
         vfd_clear_all_segments(dev_ptr);
 
-        if(sub < 5) {
+        if (sub < 5) {
             vfd_set_current_cgram_page(dev_ptr, &sub);
             vfd_display_custom_segment(dev_ptr, &counter);
         }
         sub++;
 
-        if(sub > 5) {
-            sub=0;
+        if (sub > 5) {
+            sub = 0;
             counter++;
         }
 
-        if(counter > 7) {
+        if (counter > 7) {
             counter = 0;
         }
 
         vTaskDelay(pdMS_TO_TICKS(20));
-
     }
     /* here be dragons */
 }

@@ -16,8 +16,8 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "port/error_type.h"
-#include "port/log.h"
-#include "port/malloc.h"
+#include "port/port_log.h"
+#include "port/port_malloc.h"
 
 #include <string.h>
 

@@ -1,11 +1,11 @@
 /***************************************
-* \file     API_Manager.c
-* \brief    api manager for the ESP home project
-*           hosts the webserver and opens up a restish api for 
-*           external communication
-* \date     AUG 2020
-* \author   RJAM
-****************************************/
+ * \file     API_Manager.c
+ * \brief    api manager for the ESP home project
+ *           hosts the webserver and opens up a restish api for
+ *           external communication
+ * \date     AUG 2020
+ * \author   RJAM
+ ****************************************/
 
 /** TODO:
  *  -   start the http server
@@ -17,69 +17,65 @@
  *  -   add support for websockets/stream
  **/
 
-/** Stream thoughts:  
- ** the first stream packet should contain these json tags 
+/** Stream thoughts:
+ ** the first stream packet should contain these json tags
  ** the ESP responds with an 'OK' json packet
  ** then the esp sets up a timer for simple auto-get function
- ** or for fast mode, sets up a circular buffer & inits a stream function in the 
+ ** or for fast mode, sets up a circular buffer & inits a stream function in the
  ** streamable driver. This bit would be better separated out into stream component
  ** Individual FIFO setups will be a pain...
  ** Maybe get the device to tell about its streaming component capabilities?
  ** Maybe have a standard data rate for different component fifos, then
- ** sorta try to match them? 
+ ** sorta try to match them?
  **/
 
 /**
-    Refactor Time! 
+    Refactor Time!
 
-    TODO: 
-        Decouple send/receive tasks 
+    TODO:
+        Decouple send/receive tasks
         Parse json in a more cleverer manner
 
     How should we handle http packets?
 
 
-    
+
     ~~~ TxTask ~~~
 
 
 
 */
 
-
 /********* Includes *******************/
 
-
+#include "JsonAPIManager.h"
+#include "cJSON.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 #include "port/error_type.h"
 #include "port/event.h"
-#include "port/log.h"
-#include "port/malloc.h"
-#include "cJSON.h"
-
+#include "port/port_log.h"
+#include "port/port_malloc.h"
 #include "string.h"
-
-#include "freertos/task.h"
-#include "freertos/queue.h"
-#include "JsonAPIManager.h"
 #if CONFIG_ENABLE_STREAM
 #include "StreamComponent.h"
 #endif /* CONFIG_ENABLE_STREAM */
-#include "Utilities.h"
 #include "CommandAPI.h"
 #include "PeripheralManager.h"
+#include "Utilities.h"
 
 #define DEBUG_MODE 1
 
 /****** Global Data *******************/
 
-
 const char *API_TAG = "API-MNGR";
-const char *info_json_tags[API_JSON_INFO_TAGS] = { "periph_id", "param_id"}; 
-const char *get_json_tags[API_JSON_GET_TAGS] = { "periph_id", "param_id" };
-const char *set_json_tags[API_JSON_SET_TAGS] = { "periph_id", "param_id", "data_t", "data"};
+const char *info_json_tags[API_JSON_INFO_TAGS] = {"periph_id", "param_id"};
+const char *get_json_tags[API_JSON_GET_TAGS] = {"periph_id", "param_id"};
+const char *set_json_tags[API_JSON_SET_TAGS] = {"periph_id", "param_id", "data_t", "data"};
 const char *stream_json_tags[API_JSON_STREAM_TAGS] = {"periph_id", "param_ids", "rate", "type"};
 
-const char *http_ok_hdr_str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n";
+const char *
+    http_ok_hdr_str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n";
 const char *http_server_err_str = "HTTP/1.1 500\r\n";
 const char *cr_lf_seperator = "\r\n";
 
@@ -88,23 +84,25 @@ httpd_handle_t server;
 static const httpd_uri_t cmdhandler = {
     .uri = "/cmd",
     .method = HTTP_POST,
-    .handler = cmd_post_handler, 
-    .user_ctx = NULL 
-};
+    .handler = cmd_post_handler,
+    .user_ctx = NULL};
 
 QueueHandle_t respondq;
 
 #ifdef CONFIG_ENABLE_STREAM
 
-const char *stream_json_tags[API_JSON_STREAM_TAGS] = { "periph_id", "param_ids", "chunks_per_packet", "stream_type" };
+const char *stream_json_tags[API_JSON_STREAM_TAGS] = {
+    "periph_id",
+    "param_ids",
+    "chunks_per_packet",
+    "stream_type"};
 
 static const httpd_uri_t streamhandler = {
     .uri = "/stream",
     .method = HTTP_GET,
     .handler = stream_handler,
     .user_ctx = NULL,
-    .is_websocket = true
-};
+    .is_websocket = true};
 
 #endif
 
@@ -112,54 +110,70 @@ static const httpd_uri_t streamhandler = {
 
 /** \brief - returns a json string response to device info cmd
  *  \param - rsp_data  - data returned from the PeripheralManager
- *  \param - strbuffer - a buffer to store the json string in 
- *  \param - buffer_len - length of the storage buffer 
+ *  \param - strbuffer - a buffer to store the json string in
+ *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
  */
-static status_t device_info_to_json_string(device_info_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len);
+static status_t device_info_to_json_string(
+    device_info_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len);
 
 /** \brief - returns a json string resposne to param info cmd
  *  \param - rsp_data  - data returned from the PeripheralManager
- *  \param - strbuffer - a buffer to store the json string in 
- *  \param - buffer_len - length of the storage buffer 
+ *  \param - strbuffer - a buffer to store the json string in
+ *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
  */
-static status_t param_info_to_json_string(param_info_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len);
+static status_t param_info_to_json_string(
+    param_info_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len);
 
 /** \brief - returns a json string resposne to periph info cmd
  *  \param - rsp_data  - data returned from the PeripheralManager
- *  \param - strbuffer - a buffer to store the json string in 
- *  \param - buffer_len - length of the storage buffer 
+ *  \param - strbuffer - a buffer to store the json string in
+ *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
  */
-static status_t periph_info_to_json_string(periph_info_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len);
+static status_t periph_info_to_json_string(
+    periph_info_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len);
 
 /** \brief - returns a json string resposne to GET cmd
  *  \param - rsp_data  - data returned from the PeripheralManager
- *  \param - strbuffer - a buffer to store the json string in 
- *  \param - buffer_len - length of the storage buffer 
+ *  \param - strbuffer - a buffer to store the json string in
+ *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
  */
-static status_t get_response_to_json_string(data_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len);
+static status_t get_response_to_json_string(
+    data_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len);
 
 /** \brief - returns a json string respone to SET cmd
  *  \param - rsp_data  - data returned from the PeripheralManager
- *  \param - strbuffer - a buffer to store the json string in 
- *  \param - buffer_len - length of the storage buffer 
+ *  \param - strbuffer - a buffer to store the json string in
+ *  \param - buffer_len - length of the storage buffer
  * \return STATUS_OK or Error
  */
 static status_t ok_rsp_to_json_string(ack_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len);
 
 /** \brief - returns a json string error response
  *  \param - err_msg - error message
- *  \param - strbuffer - a buffer to store the json string in 
- *  \param - buffer_len - length of the storage buffer 
+ *  \param - strbuffer - a buffer to store the json string in
+ *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
  */
-static status_t error_rsp_to_json_string(const char *err_msg, uint8_t err_code, char *strbuffer, uint16_t buffer_len);
+static status_t error_rsp_to_json_string(
+    const char *err_msg,
+    uint8_t err_code,
+    char *strbuffer,
+    uint16_t buffer_len);
 
 /** \brief - converts an info json http request into
- *           a peripheral manager command request  
+ *           a peripheral manager command request
  *  \param json    - cJSON parsed json data
  *  \param command - pointer to a cmd_request_t struct to populate
  *  \return STATUS_OK or Error
@@ -167,7 +181,7 @@ static status_t error_rsp_to_json_string(const char *err_msg, uint8_t err_code, 
 static status_t handle_info_request(cJSON *json, cmd_request_t *command);
 
 /** \brief - converts an get json http request into
- *           a peripheral manager command request  
+ *           a peripheral manager command request
  *  \param json    - cJSON parsed json data
  *  \param command - pointer to a cmd_request_t struct to populate
  *  \return STATUS_OK or Error
@@ -175,7 +189,7 @@ static status_t handle_info_request(cJSON *json, cmd_request_t *command);
 static status_t handle_get_request(cJSON *json, cmd_request_t *command);
 
 /** \brief - converts a set json http request into
- *           a peripheral manager command request  
+ *           a peripheral manager command request
  *  \param json    - cJSON parsed json data
  *  \param command - pointer to a cmd_request_t struct to populate
  *  \return STATUS_OK or Error
@@ -183,7 +197,7 @@ static status_t handle_get_request(cJSON *json, cmd_request_t *command);
 static status_t handle_set_request(cJSON *json, cmd_request_t *command);
 
 /** \brief - converts an invoke (action) json http request into
- *           a peripheral manager command request  
+ *           a peripheral manager command request
  *  \param json    - cJSON parsed json data
  *  \param command - pointer to a cmd_request_t struct to populate
  *  \return STATUS_OK or Error
@@ -191,21 +205,21 @@ static status_t handle_set_request(cJSON *json, cmd_request_t *command);
 static status_t handle_invoke_request(cJSON *json, cmd_request_t *command);
 
 /**
- *  \brief This is the api response task. 
+ *  \brief This is the api response task.
  *          It waits forever for an item to arrive in
- *          the command response queue, then assembles the json 
+ *          the command response queue, then assembles the json
  *          response and sends it asyncronously.
  *  \param args - unused
  */
 static void api_response_task(void *args);
 
-
-
 /************** RESPONSE TO JSON FUNCTIONS *********************/
 
-static status_t device_info_to_json_string(device_info_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len) {
-
-
+static status_t device_info_to_json_string(
+    device_info_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len)
+{
     status_t err = STATUS_OK;
     /** object to add to **/
     cJSON *json = NULL;
@@ -218,76 +232,74 @@ static status_t device_info_to_json_string(device_info_rsp_t *rsp_data, char *st
 
     json = cJSON_CreateObject();
 
-    if(json == NULL) {
+    if (json == NULL) {
         err = STATUS_ERR_NO_MEM;
     }
 
-    if(!err) {
+    if (!err) {
         plist = cJSON_CreateArray();
-        if(plist != NULL) {
+        if (plist != NULL) {
             cJSON_AddItemToObject(json, "periph_ids", plist);
 
-            for(uint8_t i=0; i< rsp_data->num_periphs && err == STATUS_OK; i++) {
+            for (uint8_t i = 0; i < rsp_data->num_periphs && err == STATUS_OK; i++) {
                 /** add param id's **/
                 cJSON *id = cJSON_CreateNumber((double)rsp_data->periph_ids[i]);
-                if(id != NULL) {
+                if (id != NULL) {
                     cJSON_AddItemToArray(plist, id);
                 } else {
                     err = STATUS_ERR_NO_MEM;
                 }
             }
-        }
-        else {
+        } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
-        rsp_type = cJSON_CreateNumber((double )RSP_TYPE_DEV_INFO);
-        if(rsp_type != NULL) {
+    if (!err) {
+        rsp_type = cJSON_CreateNumber((double)RSP_TYPE_DEV_INFO);
+        if (rsp_type != NULL) {
             cJSON_AddItemToObject(json, "rsp_type", rsp_type);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         name = cJSON_CreateString(rsp_data->name);
-        if(name != NULL) {
+        if (name != NULL) {
             cJSON_AddItemToObject(json, "name", name);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         periph_n = cJSON_CreateNumber((double)rsp_data->num_periphs);
-        if(periph_n != NULL) {
+        if (periph_n != NULL) {
             cJSON_AddItemToObject(json, "periph_num", periph_n);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         dev_id = cJSON_CreateNumber((double)rsp_data->device_id);
-        if(dev_id != NULL) {
+        if (dev_id != NULL) {
             cJSON_AddItemToObject(json, "dev_id", dev_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(err != STATUS_OK) {
+    if (err != STATUS_OK) {
         log_error(API_TAG, "Error creating Device info JSON");
     } else {
         json_str = cJSON_Print(json);
-        if(json_str != NULL) {
-            if(strlen(json_str) > buffer_len) {
+        if (json_str != NULL) {
+            if (strlen(json_str) > buffer_len) {
                 log_error(API_TAG, "Not enough buffer space to hold response!");
                 err = STATUS_ERR_NO_MEM;
-            } 
-            else {
+            } else {
                 memcpy(strbuffer, json_str, strlen(json_str));
             }
         } else {
@@ -299,12 +311,13 @@ static status_t device_info_to_json_string(device_info_rsp_t *rsp_data, char *st
     cJSON_Delete(json);
 
     return err;
-
 }
 
-
-static status_t param_info_to_json_string(param_info_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len) {
-
+static status_t param_info_to_json_string(
+    param_info_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len)
+{
     status_t err = STATUS_OK;
 
     cJSON *json = NULL;
@@ -315,94 +328,92 @@ static status_t param_info_to_json_string(param_info_rsp_t *rsp_data, char *strb
     cJSON *p_max = NULL;
     cJSON *methods = NULL;
     cJSON *d_type = NULL;
-    cJSON *rsp_type= NULL;
+    cJSON *rsp_type = NULL;
 
     json = cJSON_CreateObject();
 
-    if(json == NULL) {
+    if (json == NULL) {
         err = STATUS_ERR_NO_MEM;
-    } 
+    }
 
-    if(!err) {
+    if (!err) {
         /** add param name **/
         name = cJSON_CreateString(rsp_data->name);
-        if(name != NULL) {
+        if (name != NULL) {
             cJSON_AddItemToObject(json, "param_name", name);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
-
-        rsp_type = cJSON_CreateNumber((double )RSP_TYPE_PARAM_INFO);
-        if(rsp_type != NULL) {
+    if (!err) {
+        rsp_type = cJSON_CreateNumber((double)RSP_TYPE_PARAM_INFO);
+        if (rsp_type != NULL) {
             cJSON_AddItemToObject(json, "rsp_type", rsp_type);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         /** add periph id **/
         periph_id = cJSON_CreateNumber((double)rsp_data->periph_id);
-        if(periph_id != NULL) {
+        if (periph_id != NULL) {
             cJSON_AddItemToObject(json, "periph_id", periph_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         /** add param id **/
         param_id = cJSON_CreateNumber((double)rsp_data->param_id);
-        if(param_id != NULL) {
+        if (param_id != NULL) {
             cJSON_AddItemToObject(json, "param_id", param_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         /** add param max **/
         p_max = cJSON_CreateNumber((double)rsp_data->max_value);
-        if(p_max != NULL) {
+        if (p_max != NULL) {
             cJSON_AddItemToObject(json, "param_max", p_max);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         /** add methods (flags) **/
         methods = cJSON_CreateNumber((double)rsp_data->cmd_type);
-        if(methods != NULL && err == STATUS_OK) {
+        if (methods != NULL && err == STATUS_OK) {
             cJSON_AddItemToObject(json, "methods", methods);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         /** add data_type **/
         d_type = cJSON_CreateNumber((double)rsp_data->value_type);
-        if(d_type != NULL) {
+        if (d_type != NULL) {
             cJSON_AddItemToObject(json, "data_type", d_type);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(err != STATUS_OK) {
+    if (err != STATUS_OK) {
         log_error(API_TAG, "Error creating Param JSON");
     } else {
         json_str = cJSON_Print(json);
-        if(json_str != NULL) {
-            if(strlen(json_str) > buffer_len) {
+        if (json_str != NULL) {
+            if (strlen(json_str) > buffer_len) {
                 log_error(API_TAG, "Not enough buffer space to hold response!");
                 err = STATUS_ERR_NO_MEM;
-            } 
-            else {
+            } else {
                 memcpy(strbuffer, json_str, strlen(json_str));
             }
         } else {
@@ -411,16 +422,18 @@ static status_t param_info_to_json_string(param_info_rsp_t *rsp_data, char *strb
         }
     }
 
-    if(json != NULL) {
+    if (json != NULL) {
         cJSON_Delete(json);
     }
 
     return err;
 }
 
-
-static status_t periph_info_to_json_string(periph_info_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len) {
-
+static status_t periph_info_to_json_string(
+    periph_info_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len)
+{
     status_t err = STATUS_OK;
     /** object to add to **/
     cJSON *json = NULL;
@@ -434,85 +447,83 @@ static status_t periph_info_to_json_string(periph_info_rsp_t *rsp_data, char *st
 
     json = cJSON_CreateObject();
 
-    if(json == NULL) {
+    if (json == NULL) {
         err = STATUS_FAIL;
     }
 
-    if(!err) {
+    if (!err) {
         plist = cJSON_CreateArray();
-        if(plist != NULL) {
+        if (plist != NULL) {
             cJSON_AddItemToObject(json, "param_ids", plist);
 
-            for(uint8_t i=0; i< rsp_data->param_num && err == STATUS_OK; i++) {
+            for (uint8_t i = 0; i < rsp_data->param_num && err == STATUS_OK; i++) {
                 /** add param id's **/
                 cJSON *id = cJSON_CreateNumber((double)rsp_data->param_ids[i]);
-                if(id != NULL) {
+                if (id != NULL) {
                     cJSON_AddItemToArray(plist, id);
                 } else {
                     err = STATUS_ERR_NO_MEM;
                 }
             }
-        }
-        else {
+        } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
-        rsp_type = cJSON_CreateNumber((double )RSP_TYPE_PERIPH_INFO);
-        if(rsp_type != NULL) {
+    if (!err) {
+        rsp_type = cJSON_CreateNumber((double)RSP_TYPE_PERIPH_INFO);
+        if (rsp_type != NULL) {
             cJSON_AddItemToObject(json, "rsp_type", rsp_type);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         name = cJSON_CreateString(rsp_data->name);
-        if(name != NULL && err == STATUS_OK) {
+        if (name != NULL && err == STATUS_OK) {
             cJSON_AddItemToObject(json, "name", name);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         param_n = cJSON_CreateNumber((double)rsp_data->param_num);
-        if(param_n != NULL) {
+        if (param_n != NULL) {
             cJSON_AddItemToObject(json, "param_num", param_n);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         periph_t = cJSON_CreateNumber((double)rsp_data->periph_type);
-        if(periph_t != NULL) {
+        if (periph_t != NULL) {
             cJSON_AddItemToObject(json, "periph_type", periph_t);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
-    
-    if(!err) {
+
+    if (!err) {
         periph_id = cJSON_CreateNumber((double)rsp_data->periph_id);
-        if(periph_id != NULL) {
+        if (periph_id != NULL) {
             cJSON_AddItemToObject(json, "periph_id", periph_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(err != STATUS_OK) {
+    if (err != STATUS_OK) {
         log_error(API_TAG, "Error creating Peripheral JSON");
     } else {
         json_str = cJSON_Print(json);
-        if(json_str != NULL) {
-            if(strlen(json_str) > buffer_len) {
+        if (json_str != NULL) {
+            if (strlen(json_str) > buffer_len) {
                 log_error(API_TAG, "Not enough buffer space to hold response!");
                 err = STATUS_ERR_NO_MEM;
-            } 
-            else {
+            } else {
                 memcpy(strbuffer, json_str, strlen(json_str));
             }
         } else {
@@ -521,16 +532,15 @@ static status_t periph_info_to_json_string(periph_info_rsp_t *rsp_data, char *st
         }
     }
 
-    if(json != NULL) {
+    if (json != NULL) {
         cJSON_Delete(json);
     }
 
     return err;
 }
 
-
-static status_t ok_rsp_to_json_string(ack_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len) {
-
+static status_t ok_rsp_to_json_string(ack_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len)
+{
     status_t err = STATUS_OK;
     /** object to add to **/
     cJSON *json = NULL;
@@ -542,56 +552,55 @@ static status_t ok_rsp_to_json_string(ack_rsp_t *rsp_data, char *strbuffer, uint
 
     json = cJSON_CreateObject();
 
-    if(json == NULL) {
+    if (json == NULL) {
         err = STATUS_FAIL;
     }
 
-    if(!err) {
-        rsp_type = cJSON_CreateNumber((double )RSP_TYPE_ACK);
-        if(rsp_type != NULL) {
+    if (!err) {
+        rsp_type = cJSON_CreateNumber((double)RSP_TYPE_ACK);
+        if (rsp_type != NULL) {
             cJSON_AddItemToObject(json, "rsp_type", rsp_type);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         param_id = cJSON_CreateNumber((double)rsp_data->param_id);
-        if(param_id != NULL) {
+        if (param_id != NULL) {
             cJSON_AddItemToObject(json, "param_id", param_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         periph_id = cJSON_CreateNumber((double)rsp_data->periph_id);
-        if(periph_id != NULL) {
+        if (periph_id != NULL) {
             cJSON_AddItemToObject(json, "periph_id", periph_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         opt = cJSON_CreateNumber((double)rsp_data->opt);
-        if(opt != NULL) {
+        if (opt != NULL) {
             cJSON_AddItemToObject(json, "opt", opt);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(err != STATUS_OK) {
+    if (err != STATUS_OK) {
         log_error(API_TAG, "Error creating Peripheral JSON");
     } else {
         json_str = cJSON_Print(json);
-        if(json_str != NULL) {
-            if(strlen(json_str) > buffer_len) {
+        if (json_str != NULL) {
+            if (strlen(json_str) > buffer_len) {
                 log_error(API_TAG, "Not enough buffer space to hold response!");
                 err = STATUS_ERR_NO_MEM;
-            } 
-            else {
+            } else {
                 memcpy(strbuffer, json_str, strlen(json_str));
             }
         } else {
@@ -605,9 +614,12 @@ static status_t ok_rsp_to_json_string(ack_rsp_t *rsp_data, char *strbuffer, uint
     return err;
 }
 
-
-static status_t error_rsp_to_json_string(const char *errmsg, uint8_t error_code, char *strbuffer, uint16_t bufflen) {
-
+static status_t error_rsp_to_json_string(
+    const char *errmsg,
+    uint8_t error_code,
+    char *strbuffer,
+    uint16_t bufflen)
+{
     status_t err = STATUS_OK;
     /** object to add to **/
     cJSON *json = NULL;
@@ -618,43 +630,43 @@ static status_t error_rsp_to_json_string(const char *errmsg, uint8_t error_code,
 
     json = cJSON_CreateObject();
 
-    if(json == NULL) {
+    if (json == NULL) {
         err = STATUS_ERR_NO_MEM;
     }
 
-    if(!err) {
-        rsp_type = cJSON_CreateNumber((double )RSP_TYPE_ERR);
-        if(rsp_type != NULL) {
+    if (!err) {
+        rsp_type = cJSON_CreateNumber((double)RSP_TYPE_ERR);
+        if (rsp_type != NULL) {
             cJSON_AddItemToObject(json, "rsp_type", rsp_type);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         err_msg = cJSON_CreateString(errmsg);
-        if(err_msg != NULL) {
+        if (err_msg != NULL) {
             cJSON_AddItemToObject(json, "error", err_msg);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         err_code = cJSON_CreateNumber((double)error_code);
-        if(err_code != NULL) {
+        if (err_code != NULL) {
             cJSON_AddItemToObject(json, "err_code", err_code);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(err != STATUS_OK) {
+    if (err != STATUS_OK) {
         log_error(API_TAG, "Error creating Peripheral JSON");
     } else {
         json_str = cJSON_Print(json);
-        if(json_str != NULL) {
-            if(strlen(json_str) > bufflen) {
+        if (json_str != NULL) {
+            if (strlen(json_str) > bufflen) {
                 log_error(API_TAG, "Not enough buffer space to hold response!");
                 err = STATUS_ERR_NO_MEM;
             } else {
@@ -666,18 +678,18 @@ static status_t error_rsp_to_json_string(const char *errmsg, uint8_t error_code,
         }
     }
 
-    if(json != NULL) {
+    if (json != NULL) {
         cJSON_Delete(json);
     }
 
-
     return err;
-
 }
- 
 
-static status_t get_response_to_json_string(data_rsp_t *rsp_data, char *strbuffer, uint16_t buffer_len) {
-
+static status_t get_response_to_json_string(
+    data_rsp_t *rsp_data,
+    char *strbuffer,
+    uint16_t buffer_len)
+{
     status_t err = STATUS_OK;
     /** object to add to **/
     cJSON *json = NULL;
@@ -690,46 +702,45 @@ static status_t get_response_to_json_string(data_rsp_t *rsp_data, char *strbuffe
 
     json = cJSON_CreateObject();
 
-    if(json == NULL) {
+    if (json == NULL) {
         err = STATUS_FAIL;
     }
 
-    if(!err) {
+    if (!err) {
         periph_id = cJSON_CreateNumber((double)rsp_data->periph_id);
-        if(periph_id != NULL) {
+        if (periph_id != NULL) {
             cJSON_AddItemToObject(json, "periph_id", periph_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         param_id = cJSON_CreateNumber((double)rsp_data->param_id);
-        if(param_id != NULL) {
+        if (param_id != NULL) {
             cJSON_AddItemToObject(json, "param_id", param_id);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
+    if (!err) {
         rsp_type = cJSON_CreateNumber((double)RSP_TYPE_DATA);
-        if(rsp_type != NULL) {
+        if (rsp_type != NULL) {
             cJSON_AddItemToObject(json, "rsp_type", rsp_type);
         } else {
             err = STATUS_ERR_NO_MEM;
         }
     }
 
-    if(!err) {
-        switch (rsp_data->data_t)
-        {
+    if (!err) {
+        switch (rsp_data->data_t) {
             case DATATYPE_BOOL:
             case DATATYPE_UINT8:
             case DATATYPE_UINT16:
             case DATATYPE_UINT32:
                 data = cJSON_CreateNumber((double)rsp_data->data.uint_data);
-                if(data != NULL) {
+                if (data != NULL) {
                     cJSON_AddItemToObject(json, "data", data);
                 } else {
                     err = STATUS_ERR_NO_MEM;
@@ -739,7 +750,7 @@ static status_t get_response_to_json_string(data_rsp_t *rsp_data, char *strbuffe
             case DATATYPE_INT16:
             case DATATYPE_INT32:
                 data = cJSON_CreateNumber((double)rsp_data->data.sint_data);
-                if(data != NULL) {
+                if (data != NULL) {
                     cJSON_AddItemToObject(json, "data", data);
                 } else {
                     err = STATUS_ERR_NO_MEM;
@@ -748,7 +759,7 @@ static status_t get_response_to_json_string(data_rsp_t *rsp_data, char *strbuffe
             case DATATYPE_FLOAT:
             case DATATYPE_DOUBLE:
                 data = cJSON_CreateNumber((double)rsp_data->data.float_data);
-                if(data != NULL) {
+                if (data != NULL) {
                     cJSON_AddItemToObject(json, "data", data);
                 } else {
                     err = STATUS_ERR_NO_MEM;
@@ -756,34 +767,32 @@ static status_t get_response_to_json_string(data_rsp_t *rsp_data, char *strbuffe
                 break;
             case DATATYPE_STRING:
                 data = cJSON_CreateString(&rsp_data->data.str_data[0]);
-                if(data != NULL) {
+                if (data != NULL) {
                     cJSON_AddItemToObject(json, "data", data);
                 } else {
                     err = STATUS_ERR_NO_MEM;
                 }
                 break;
-            default:
-                break;
+            default: break;
         }
     }
 
-    if(!err) {
+    if (!err) {
         t_data = cJSON_CreateNumber((double)rsp_data->data_t);
-        if(t_data != NULL) {
+        if (t_data != NULL) {
             cJSON_AddItemToObject(json, "data_type", t_data);
         } else {
             err = STATUS_FAIL;
         }
     }
 
-    if(err != STATUS_OK) {
+    if (err != STATUS_OK) {
         log_error(API_TAG, "Error creating Peripheral JSON");
-    } 
-    else {
+    } else {
         /** convert the assembled json to a string */
         json_str = cJSON_Print(json);
-        if(json_str != NULL) {
-            if(strlen(json_str) > buffer_len) {
+        if (json_str != NULL) {
+            if (strlen(json_str) > buffer_len) {
                 log_error(API_TAG, "Not enough buffer space to hold response!");
                 err = STATUS_FAIL;
             } else {
@@ -796,20 +805,17 @@ static status_t get_response_to_json_string(data_rsp_t *rsp_data, char *strbuffe
     }
 
     /** this deletes all objects attached **/
-    if(json != NULL) {
+    if (json != NULL) {
         cJSON_Delete(json);
     }
 
     return err;
-
 }
-
 
 /************ JSON REQUEST HANDLER FUNCTIONS *********************/
 
-
-static status_t handle_info_request(cJSON *json, cmd_request_t *command) {
-
+static status_t handle_info_request(cJSON *json, cmd_request_t *command)
+{
     status_t err = STATUS_OK;
     char *fieldname;
     cJSON *periph_id = NULL;
@@ -819,29 +825,26 @@ static status_t handle_info_request(cJSON *json, cmd_request_t *command) {
     log_info(API_TAG, "Looking for %s...", fieldname);
     periph_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-    if(periph_id == NULL) {
+    if (periph_id == NULL) {
         log_error(API_TAG, "Error field %s missing", fieldname);
         err = API_ERR_MISSING_JSON_FIELD;
-    }
-    else if (!cJSON_IsNumber(periph_id)) {
+    } else if (!cJSON_IsNumber(periph_id)) {
         err = API_ERR_FIELD_NOT_NUMBER;
     }
 
-
-    if(!err) {
+    if (!err) {
         fieldname = info_json_tags[1];
         param_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-        if(param_id == NULL) {
+        if (param_id == NULL) {
             log_error(API_TAG, "Error field %s missing", fieldname);
             err = API_ERR_MISSING_JSON_FIELD;
-        }
-        else if (!cJSON_IsNumber(param_id)) {
+        } else if (!cJSON_IsNumber(param_id)) {
             err = API_ERR_FIELD_NOT_NUMBER;
         }
     }
 
-    if(!err) {
+    if (!err) {
         command->data.cmd_data.periph_id = (uint8_t)periph_id->valueint;
         command->data.cmd_data.param_id = (uint8_t)param_id->valueint;
         command->data.cmd_data.cmd_type = CMD_TYPE_INFO;
@@ -854,10 +857,8 @@ static status_t handle_info_request(cJSON *json, cmd_request_t *command) {
     return err;
 }
 
-
-static status_t handle_get_request(cJSON *json, cmd_request_t *command) {
-
-
+static status_t handle_get_request(cJSON *json, cmd_request_t *command)
+{
     status_t err = STATUS_OK;
     char *fieldname;
     cJSON *periph_id = NULL;
@@ -867,29 +868,26 @@ static status_t handle_get_request(cJSON *json, cmd_request_t *command) {
     log_info(API_TAG, "Looking for %s...", fieldname);
     periph_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-    if(periph_id == NULL) {
+    if (periph_id == NULL) {
         log_error(API_TAG, "Error field %s missing", fieldname);
         err = API_ERR_MISSING_JSON_FIELD;
-    }
-    else if (!cJSON_IsNumber(periph_id)) {
+    } else if (!cJSON_IsNumber(periph_id)) {
         err = API_ERR_FIELD_NOT_NUMBER;
     }
 
-
-    if(!err) {
+    if (!err) {
         fieldname = get_json_tags[1];
         param_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-        if(param_id == NULL) {
+        if (param_id == NULL) {
             log_error(API_TAG, "Error field %s missing", fieldname);
             err = API_ERR_MISSING_JSON_FIELD;
-        }
-        else if (!cJSON_IsNumber(param_id)) {
+        } else if (!cJSON_IsNumber(param_id)) {
             err = API_ERR_FIELD_NOT_NUMBER;
         }
     }
 
-    if(!err) {
+    if (!err) {
         command->data.cmd_data.periph_id = (uint8_t)periph_id->valueint;
         command->data.cmd_data.param_id = (uint8_t)param_id->valueint;
         command->data.cmd_data.cmd_type = CMD_TYPE_GET;
@@ -900,11 +898,10 @@ static status_t handle_get_request(cJSON *json, cmd_request_t *command) {
     }
 
     return err;
-
 }
 
-
-static status_t handle_set_request(cJSON *json, cmd_request_t *command) {
+static status_t handle_set_request(cJSON *json, cmd_request_t *command)
+{
     status_t err = STATUS_OK;
     char *fieldname;
     cJSON *periph_id = NULL;
@@ -917,54 +914,51 @@ static status_t handle_set_request(cJSON *json, cmd_request_t *command) {
     log_info(API_TAG, "Looking for %s...", fieldname);
     periph_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-    if(periph_id == NULL) {
+    if (periph_id == NULL) {
         log_error(API_TAG, "Error field %s missing", fieldname);
         err = API_ERR_MISSING_JSON_FIELD;
-    }
-    else if (!cJSON_IsNumber(periph_id)) {
+    } else if (!cJSON_IsNumber(periph_id)) {
         err = API_ERR_FIELD_NOT_NUMBER;
     }
 
-
-    if(!err) {
+    if (!err) {
         fieldname = info_json_tags[1];
         param_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-        if(param_id == NULL) {
+        if (param_id == NULL) {
             log_error(API_TAG, "Error field %s missing", fieldname);
             err = API_ERR_MISSING_JSON_FIELD;
-        }
-        else if (!cJSON_IsNumber(param_id)) {
+        } else if (!cJSON_IsNumber(param_id)) {
             err = API_ERR_FIELD_NOT_NUMBER;
         }
     }
 
-    if(!err) {
+    if (!err) {
         fieldname = set_json_tags[2];
         data_t = cJSON_GetObjectItemCaseSensitive(json, fieldname);
-        if(data_t == NULL) {
+        if (data_t == NULL) {
             log_error(API_TAG, "Error field %s missing", fieldname);
             err = API_ERR_MISSING_JSON_FIELD;
         }
 
-        else if (!cJSON_IsNumber(data_t)) {
+        else if (!cJSON_IsNumber(data_t))
+        {
             err = API_ERR_FIELD_NOT_NUMBER;
         }
     }
 
-    if(!err) {
+    if (!err) {
         fieldname = set_json_tags[3];
         data = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-        if(data == NULL) {
+        if (data == NULL) {
             log_error(API_TAG, "Error field %s missing", fieldname);
             err = API_ERR_MISSING_JSON_FIELD;
         }
     }
     /** check the data_t field matches the data type */
-    if(!err) {
-        switch (data_t->valueint)
-        {
+    if (!err) {
+        switch (data_t->valueint) {
             case DATATYPE_BOOL:
             case DATATYPE_UINT8:
             case DATATYPE_UINT16:
@@ -974,43 +968,40 @@ static status_t handle_set_request(cJSON *json, cmd_request_t *command) {
             case DATATYPE_INT32:
             case DATATYPE_FLOAT:
             case DATATYPE_DOUBLE:
-                if(!cJSON_IsNumber(data)) {
+                if (!cJSON_IsNumber(data)) {
                     err = API_ERR_FIELD_NOT_NUMBER;
                 }
                 break;
             case DATATYPE_STRING:
-                if(!cJSON_IsString(data)) {
+                if (!cJSON_IsString(data)) {
                     err = API_ERR_FIELD_NOT_STRING;
                 }
                 break;
-            default:
-                err = API_ERR_INVALID_DATA_TYPE;
-                break;
+            default: err = API_ERR_INVALID_DATA_TYPE; break;
         }
     }
 
-    if(!err) {
+    if (!err) {
         /** set the data field depending on type **/
-        switch (data_t->valueint)
-        {
-        case DATATYPE_FLOAT:
-        case DATATYPE_DOUBLE:
-            command->data.cmd_data.data.float_data = (float)data->valuedouble;
-            break;
-        case DATATYPE_STRING:
-            copy_len = strlen(data->valuestring);
-            copy_len = (copy_len > PERIPHERAL_MANAGER_MAX_STR_LEN-1 ?
-                                   PERIPHERAL_MANAGER_MAX_STR_LEN-1 : copy_len);
-            stpncpy(&command->data.cmd_data.data.str_data[0], data->valuestring, copy_len);
-            break;
-        case DATATYPE_INT8:
-        case DATATYPE_INT16:
-        case DATATYPE_INT32:
-            command->data.cmd_data.data.sint_data = (int32_t)data->valueint;
-            break;
-        default:
-            command->data.cmd_data.data.uint_data = (uint32_t)data->valueint;
-            break;
+        switch (data_t->valueint) {
+            case DATATYPE_FLOAT:
+            case DATATYPE_DOUBLE:
+                command->data.cmd_data.data.float_data = (float)data->valuedouble;
+                break;
+            case DATATYPE_STRING:
+                copy_len = strlen(data->valuestring);
+                copy_len =
+                    (copy_len > PERIPHERAL_MANAGER_MAX_STR_LEN - 1
+                         ? PERIPHERAL_MANAGER_MAX_STR_LEN - 1
+                         : copy_len);
+                stpncpy(&command->data.cmd_data.data.str_data[0], data->valuestring, copy_len);
+                break;
+            case DATATYPE_INT8:
+            case DATATYPE_INT16:
+            case DATATYPE_INT32:
+                command->data.cmd_data.data.sint_data = (int32_t)data->valueint;
+                break;
+            default: command->data.cmd_data.data.uint_data = (uint32_t)data->valueint; break;
         }
         command->data.cmd_data.periph_id = (uint8_t)periph_id->valueint;
         command->data.cmd_data.param_id = (uint8_t)param_id->valueint;
@@ -1021,12 +1012,11 @@ static status_t handle_set_request(cJSON *json, cmd_request_t *command) {
         command->cmd_uid = 0;
     }
 
-    return err;  
+    return err;
 }
 
-
-static status_t handle_invoke_request(cJSON *json, cmd_request_t *command) {
-
+static status_t handle_invoke_request(cJSON *json, cmd_request_t *command)
+{
     status_t err = STATUS_OK;
     char *fieldname;
     cJSON *periph_id = NULL;
@@ -1036,29 +1026,26 @@ static status_t handle_invoke_request(cJSON *json, cmd_request_t *command) {
     log_info(API_TAG, "Looking for %s...", fieldname);
     periph_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-    if(periph_id == NULL) {
+    if (periph_id == NULL) {
         log_error(API_TAG, "Error field %s missing", fieldname);
         err = API_ERR_MISSING_JSON_FIELD;
-    }
-    else if (!cJSON_IsNumber(periph_id)) {
+    } else if (!cJSON_IsNumber(periph_id)) {
         err = API_ERR_FIELD_NOT_NUMBER;
     }
 
-
-    if(!err) {
+    if (!err) {
         fieldname = info_json_tags[1];
         param_id = cJSON_GetObjectItemCaseSensitive(json, fieldname);
 
-        if(param_id == NULL) {
+        if (param_id == NULL) {
             log_error(API_TAG, "Error field %s missing", fieldname);
             err = API_ERR_MISSING_JSON_FIELD;
-        }
-        else if (!cJSON_IsNumber(param_id)) {
+        } else if (!cJSON_IsNumber(param_id)) {
             err = API_ERR_FIELD_NOT_NUMBER;
         }
     }
 
-    if(!err) {
+    if (!err) {
         command->data.cmd_data.periph_id = (uint8_t)periph_id->valueint;
         command->data.cmd_data.param_id = (uint8_t)param_id->valueint;
         command->data.cmd_data.cmd_type = CMD_TYPE_ACT;
@@ -1068,35 +1055,33 @@ static status_t handle_invoke_request(cJSON *json, cmd_request_t *command) {
         command->cmd_uid = 0;
     }
 
-    if(periph_id != NULL) {
+    if (periph_id != NULL) {
         cJSON_Delete(periph_id);
     }
-    if(param_id != NULL) {
+    if (param_id != NULL) {
         cJSON_Delete(param_id);
     }
     return err;
-
 }
-
 
 /************* Response Handler Task ***************************/
 
-static void api_response_task(void *args) {
-
+static void api_response_task(void *args)
+{
     /**
      *  This task waits for an item from the command response queue
-     *  and transmits a json response to the http client, before closing the 
+     *  and transmits a json response to the http client, before closing the
      *  session.
-     * 
+     *
      *  Yay, async http works!
      *  http_server raises an error when it expects the connection but it
-     *  has already been closed. I don't think httpd_sess_delete_invalid 
-     *  closes anything. No debug anyway. 
-     * 
+     *  has already been closed. I don't think httpd_sess_delete_invalid
+     *  closes anything. No debug anyway.
+     *
      *  This is hacky but it shouldn't have to be.
-     * 
+     *
      *  TODO: Investigate httpd error further
-     * 
+     *
      ***/
 
     status_t err = STATUS_OK;
@@ -1111,72 +1096,83 @@ static void api_response_task(void *args) {
     char response[API_MAX_RESPONSE_LEN] = {0};
 
     /** wait for queue to be created **/
-    while(respondq == NULL) {
+    while (respondq == NULL) {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 
-    while(1) {
-
+    while (1) {
         /** reset the error status **/
         err = STATUS_OK;
 
         /** wait forever for item from response queue **/
-        if(xQueueReceive(respondq, &command_response, portMAX_DELAY) != pdTRUE) {
+        if (xQueueReceive(respondq, &command_response, portMAX_DELAY) != pdTRUE) {
             log_error(API_TAG, "Error in reading from queue");
             err = API_ERR_CMD_TIMEOUT;
         }
 
         log_info("Got PM Queue item...\n");
 
-        if(!err)
-        {
+        if (!err) {
             /** create the json response from command response **/
-            switch (command_response.rsp_type)
-            {
-            case RSP_TYPE_ERR:
-                err = error_rsp_to_json_string(&command_response.rsp_data.error.err_message[0],
-                                         command_response.rsp_data.error.error_code,
-                                         response,
-                                         API_MAX_RESPONSE_LEN-1
-                                        );
-                break;
-            
-            case RSP_TYPE_ACK:
-                err = ok_rsp_to_json_string(&command_response.rsp_data.ack, response, API_MAX_RESPONSE_LEN-1);
-                break;
-            case RSP_TYPE_DATA:
-                err = get_response_to_json_string(&command_response.rsp_data.data, response, API_MAX_RESPONSE_LEN-1);
-                break;
-            case RSP_TYPE_DEV_INFO:
-                err = device_info_to_json_string(&command_response.rsp_data.dev_info, response, API_MAX_RESPONSE_LEN-1);
-                break;
-            case RSP_TYPE_PERIPH_INFO:
-                err = periph_info_to_json_string(&command_response.rsp_data.periph_info, response, API_MAX_RESPONSE_LEN-1);
-                break;
-            case RSP_TYPE_PARAM_INFO:
-                err = param_info_to_json_string(&command_response.rsp_data.param_info, response, API_MAX_RESPONSE_LEN-1);
-                break;
-            default:
-                log_error(API_TAG, "Error: Invalid RSP type");
-                err = error_rsp_to_json_string("PeriphManager Error",
-                                                88,
-                                                response,
-                                                API_MAX_RESPONSE_LEN-1
-                                                );
-                break;
+            switch (command_response.rsp_type) {
+                case RSP_TYPE_ERR:
+                    err = error_rsp_to_json_string(
+                        &command_response.rsp_data.error.err_message[0],
+                        command_response.rsp_data.error.error_code,
+                        response,
+                        API_MAX_RESPONSE_LEN - 1);
+                    break;
 
-            if(err) {
-                /** failed to assemble json response or add/receive from queue **/
-                log_error(API_TAG, "Error creating JSON response!!");
+                case RSP_TYPE_ACK:
+                    err = ok_rsp_to_json_string(
+                        &command_response.rsp_data.ack,
+                        response,
+                        API_MAX_RESPONSE_LEN - 1);
+                    break;
+                case RSP_TYPE_DATA:
+                    err = get_response_to_json_string(
+                        &command_response.rsp_data.data,
+                        response,
+                        API_MAX_RESPONSE_LEN - 1);
+                    break;
+                case RSP_TYPE_DEV_INFO:
+                    err = device_info_to_json_string(
+                        &command_response.rsp_data.dev_info,
+                        response,
+                        API_MAX_RESPONSE_LEN - 1);
+                    break;
+                case RSP_TYPE_PERIPH_INFO:
+                    err = periph_info_to_json_string(
+                        &command_response.rsp_data.periph_info,
+                        response,
+                        API_MAX_RESPONSE_LEN - 1);
+                    break;
+                case RSP_TYPE_PARAM_INFO:
+                    err = param_info_to_json_string(
+                        &command_response.rsp_data.param_info,
+                        response,
+                        API_MAX_RESPONSE_LEN - 1);
+                    break;
+                default:
+                    log_error(API_TAG, "Error: Invalid RSP type");
+                    err = error_rsp_to_json_string(
+                        "PeriphManager Error",
+                        88,
+                        response,
+                        API_MAX_RESPONSE_LEN - 1);
+                    break;
+
+                    if (err) {
+                        /** failed to assemble json response or add/receive from queue **/
+                        log_error(API_TAG, "Error creating JSON response!!");
+                    }
             }
         }
-    }
 
-        /** 
+        /**
          * Prepare the response & header buffers
          **/
-        if(!err) {
-
+        if (!err) {
             resp_arg = command_response.rsp_args;
             hd = resp_arg->hd;
             fd = resp_arg->fd;
@@ -1186,38 +1182,40 @@ static void api_response_task(void *args) {
 #endif /* DEBUG */
 
             /** copy the headers into the header buffer **/
-            if(snlog_info(header_buff, API_MAX_HDR_RESPONSE_LEN, http_ok_hdr_str, strlen(response)) > API_MAX_HDR_RESPONSE_LEN) {
+            if (snlog_info(header_buff, API_MAX_HDR_RESPONSE_LEN, http_ok_hdr_str, strlen(response))
+                > API_MAX_HDR_RESPONSE_LEN)
+            {
                 log_error(API_TAG, "Error http header too long");
                 err = STATUS_ERR_INVALID_ARG;
             }
 #ifdef DEBUG_MODE
-        // log_info(API_TAG, "Sending headers");
-        // log_info(API_TAG, "headers: %s", header_buff);
-#endif // DEBUG_MODE
+            // log_info(API_TAG, "Sending headers");
+            // log_info(API_TAG, "headers: %s", header_buff);
+#endif  // DEBUG_MODE
         }
         /*********** Return Response ************/
-        /** At this point we should have a response ready in all situations 
+        /** At this point we should have a response ready in all situations
          *  set the http response type to json
          *  and send the response with the json data
          **/
-    if(!err) {
-        /** send the http headers **/
-        
-        if(httpd_socket_send(hd, fd, (const char *)header_buff, strlen(header_buff), 0) < 0) {
-            log_error(API_TAG, "Failed to send HTTP response header");
-        }
-        /** send crlf sep **/
-        if(httpd_socket_send(hd, fd, cr_lf_seperator, strlen(cr_lf_seperator), 0) < 0) {
-            log_error(API_TAG, "Failed to send cr lf data");
-        }
-            
-#ifdef DEBUG_MODE 
-        log_info("Content length %u\n", strlen(response));
-        log_info(API_TAG, "Content: %s", response);
-        log_info(API_TAG, "Sending Content");
-#endif // DEBUG_MODE
+        if (!err) {
+            /** send the http headers **/
+
+            if (httpd_socket_send(hd, fd, (const char *)header_buff, strlen(header_buff), 0) < 0) {
+                log_error(API_TAG, "Failed to send HTTP response header");
+            }
+            /** send crlf sep **/
+            if (httpd_socket_send(hd, fd, cr_lf_seperator, strlen(cr_lf_seperator), 0) < 0) {
+                log_error(API_TAG, "Failed to send cr lf data");
+            }
+
+#ifdef DEBUG_MODE
+            log_info("Content length %u\n", strlen(response));
+            log_info(API_TAG, "Content: %s", response);
+            log_info(API_TAG, "Sending Content");
+#endif  // DEBUG_MODE
             /** send the response data **/
-            if(httpd_socket_send(hd, fd, (const char *)response, strlen(response), 0) < 0) {
+            if (httpd_socket_send(hd, fd, (const char *)response, strlen(response), 0) < 0) {
                 log_error(API_TAG, "Failed to send HTTP response data");
             }
 
@@ -1228,8 +1226,8 @@ static void api_response_task(void *args) {
             memset(response, 0, sizeof(uint8_t) * API_MAX_RESPONSE_LEN);
             memset(header_buff, 0, sizeof(uint8_t) * API_MAX_HDR_RESPONSE_LEN);
 
-        /** free the async resources **/
-            if(resp_arg) {
+            /** free the async resources **/
+            if (resp_arg) {
                 log_info(API_TAG, "Freeing args");
                 heap_caps_free(resp_arg);
             }
@@ -1238,12 +1236,11 @@ static void api_response_task(void *args) {
     /** Here be Dragons **/
 }
 
-
 #ifdef CONFIG_ENABLE_STREAM
 
 /** Stream handler **/
-status_t stream_handler(httpd_req_t *req) {
-
+status_t stream_handler(httpd_req_t *req)
+{
     // httpd_ws_frame_t ws_pkt = {0};
     // httpd_ws_frame_t ws_rsp = {0};
     // cJSON *cmd_json = NULL;
@@ -1293,9 +1290,8 @@ status_t stream_handler(httpd_req_t *req) {
     //         cmd_request_t strm_req = {0};
     //         stream_cmd_t strm_data = {0};
 
-
     //         cmd_json = cJSON_Parse((char *)wsbuffer);
-            
+
     //         if(cmd_json == NULL) {
     //             err = STATUS_ERR_INVALID_RESPONSE;
     //             log_error(API_TAG, "Error parsing json!");
@@ -1303,12 +1299,12 @@ status_t stream_handler(httpd_req_t *req) {
     //         /** GO THROUGH TAGS **/
     //         if(!err) {
     //             for(uint8_t i=0; i < API_JSON_STREAM_TAGS; i++) {
-    //                 cmd_element = cJSON_GetObjectItemCaseSensitive(cmd_json, stream_json_tags[i]);
-    //                 if(cmd_element == NULL) {
+    //                 cmd_element = cJSON_GetObjectItemCaseSensitive(cmd_json,
+    //                 stream_json_tags[i]); if(cmd_element == NULL) {
     //                     log_error(API_TAG, "Error: Missing tag - %s", stream_json_tags[i]);
     //                     err = STATUS_ERR_INVALID_ARG;
-    //                     error_rsp_to_json_string("Error: missing tag", 100, (char *)rspbuffer, API_MAX_RESPONSE_LEN-1);
-    //                     break;
+    //                     error_rsp_to_json_string("Error: missing tag", 100, (char *)rspbuffer,
+    //                     API_MAX_RESPONSE_LEN-1); break;
     //                 }
 
     //                 else {
@@ -1320,14 +1316,17 @@ status_t stream_handler(httpd_req_t *req) {
     //                     case 1:
     //                         if(!cJSON_IsArray(cmd_element)) {
     //                             log_error(API_TAG, "Error in json");
-    //                             error_rsp_to_json_string("Error: param_ids should be an array", 100, (char *)rspbuffer, API_MAX_RESPONSE_LEN-1);                  
-    //                             err = STATUS_FAIL;
-    //                         } 
-    //                         else if(cJSON_GetArraySize(cmd_element) > 6 || cJSON_GetArraySize(cmd_element) < 1) 
+    //                             error_rsp_to_json_string("Error: param_ids should be an array",
+    //                             100, (char *)rspbuffer, API_MAX_RESPONSE_LEN-1); err =
+    //                             STATUS_FAIL;
+    //                         }
+    //                         else if(cJSON_GetArraySize(cmd_element) > 6 ||
+    //                         cJSON_GetArraySize(cmd_element) < 1)
     //                         {
     //                             log_error(API_TAG, "Error in json");
-    //                             error_rsp_to_json_string("Error: param_ids invalid length (1-6)", 100, (char *)rspbuffer, API_MAX_RESPONSE_LEN-1);                  
-    //                             err = STATUS_FAIL;
+    //                             error_rsp_to_json_string("Error: param_ids invalid length (1-6)",
+    //                             100, (char *)rspbuffer, API_MAX_RESPONSE_LEN-1); err =
+    //                             STATUS_FAIL;
     //                         }
     //                         else {
     //                             uint8_t arr_len = cJSON_GetArraySize(cmd_element);
@@ -1337,13 +1336,14 @@ status_t stream_handler(httpd_req_t *req) {
     //                                 array_val = cJSON_GetArrayItem(cmd_element, i);
     //                                 if(array_val == NULL) {
     //                                     log_error(API_TAG, "Error in unpacking param ids");
-    //                                     error_rsp_to_json_string("Error decoding JSON!", 100, (char *)rspbuffer, API_MAX_RESPONSE_LEN-1);                  
-    //                                     err = STATUS_FAIL;                                    
-    //                                     break;
+    //                                     error_rsp_to_json_string("Error decoding JSON!", 100,
+    //                                     (char *)rspbuffer, API_MAX_RESPONSE_LEN-1); err =
+    //                                     STATUS_FAIL; break;
     //                                 }
     //                                 else {
     //                                     strm_data.param_ids[i] = (uint8_t)array_val->valuedouble;
-    //                                     log_info(API_TAG,"Set element %u to %u", i, strm_data.param_ids[i]);
+    //                                     log_info(API_TAG,"Set element %u to %u", i,
+    //                                     strm_data.param_ids[i]);
     //                                 }
     //                             }
     //                         }
@@ -1364,7 +1364,7 @@ status_t stream_handler(httpd_req_t *req) {
     //                 cJSON_free(cmd_json);
     //             }
     //         }
-            
+
     //         /** Send the stream request to the PM **/
     //         if(err == STATUS_OK) {
 
@@ -1376,35 +1376,37 @@ status_t stream_handler(httpd_req_t *req) {
     //             strm_req.type = REQ_PKT_TYPE_STREAM;
     //             strm_req.cmd_uid = 100;
 
-    //             if(xQueueSend(command_queue, &strm_req, API_MANAGER_QUEUE_PUT_TIMEOUT) != pdTRUE) {
-    //                 log_info(API_TAG, "Error in writing to queue");            
+    //             if(xQueueSend(command_queue, &strm_req, API_MANAGER_QUEUE_PUT_TIMEOUT) != pdTRUE)
+    //             {
+    //                 log_info(API_TAG, "Error in writing to queue");
     //                 err = STATUS_FAIL;
     //             }
     //             if(xQueueReceive(respondq, &rsp, API_MANAGER_QUEUE_GET_TIMEOUT) != pdTRUE) {
     //                 log_error(API_TAG, "Error in reading from queue");
     //                 err = STATUS_FAIL;
     //             }
-    //             else 
+    //             else
     //             {
     //                 /** json the response & send **/
     //                 if(rsp.rsp_data.rsp_type == RSP_TYPE_ERR) {
-    //                     // error_rsp_to_json_string(rsp.rsp_data.ustring, rsp.rsp_data.data, response, API_MAX_RESPONSE_LEN-1);
-    //                     log_info(API_TAG, "Periph manager says no...");
-    //                     err = STATUS_FAIL;
-    //                     error_rsp_to_json_string(rsp.rsp_data.ustring, 100, (char *)rspbuffer, API_MAX_RESPONSE_LEN);
+    //                     // error_rsp_to_json_string(rsp.rsp_data.ustring, rsp.rsp_data.data,
+    //                     response, API_MAX_RESPONSE_LEN-1); log_info(API_TAG, "Periph manager says
+    //                     no..."); err = STATUS_FAIL;
+    //                     error_rsp_to_json_string(rsp.rsp_data.ustring, 100, (char *)rspbuffer,
+    //                     API_MAX_RESPONSE_LEN);
     //                 }
     //                 else {
 
     //                     /** TODO: Make sure OK response
-    //                      *        Get the timer value from rsp.data     
+    //                      *        Get the timer value from rsp.data
     //                      *        Store the req->handle, sock_id = get_socket_from_req()    x
     //                      *        Timer value, timer handle, circular wsbuffer pointer/handle x
     //                      *        etc.
     //                      *        Start the timer, send an ok response? Optional
-    //                      *        Make timer callback 
-    //                      *        Pass pointer to stream info as argument 
+    //                      *        Make timer callback
+    //                      *        Pass pointer to stream info as argument
     //                      *        read data from circular wsbuffer
-    //                      *        add ws packet to httpd work queue 
+    //                      *        add ws packet to httpd work queue
     //                      *              (how to deal with lag/slowdown?)
     //                      **/
     //                     log_info("Stream", "Stream established!");
@@ -1422,8 +1424,9 @@ status_t stream_handler(httpd_req_t *req) {
     //             return STATUS_OK;
     //         }
     //         else {
-    //             ok_rsp_to_json_string(&rsp.rsp_data.ack, (char *)rspbuffer, API_MAX_RESPONSE_LEN);
-                
+    //             ok_rsp_to_json_string(&rsp.rsp_data.ack, (char *)rspbuffer,
+    //             API_MAX_RESPONSE_LEN);
+
     //             ws_rsp.final = true;
     //             ws_rsp.type = HTTPD_WS_TYPE_TEXT;
     //             ws_rsp.payload = rspbuffer;
@@ -1440,10 +1443,10 @@ status_t stream_handler(httpd_req_t *req) {
 
 #endif
 
-
 /********************** URL HANDLERS *****************/
 
-status_t cmd_post_handler(httpd_req_t *req) {
+status_t cmd_post_handler(httpd_req_t *req)
+{
     // HTTP Receive packet
 
     // ~~~ RxTask ~~~
@@ -1471,26 +1474,28 @@ status_t cmd_post_handler(httpd_req_t *req) {
     char response[API_MAX_RESPONSE_LEN] = {0};
 
     /******* Sanity Checks *******/
-    if(req->content_len > API_MANAGER_MAX_POST_SIZE-1 || req->content_len < 1) {
+    if (req->content_len > API_MANAGER_MAX_POST_SIZE - 1 || req->content_len < 1) {
         /** ERROR RSP Request invalid length */
         err = API_ERR_INVALID_JSON_LENGTH;
     }
 
-    if(!err) {
+    if (!err) {
         bytes_rcvd = httpd_req_recv(req, content, req->content_len);
-    
-        if(bytes_rcvd < 0) {
+
+        if (bytes_rcvd < 0) {
             /** Something went wrong! */
             httpd_resp_send_500(req);
-            return (bytes_rcvd == HTTPD_SOCK_ERR_TIMEOUT ? STATUS_ERR_TIMEOUT : STATUS_ERR_INVALID_STATE);
+            return (
+                bytes_rcvd == HTTPD_SOCK_ERR_TIMEOUT ? STATUS_ERR_TIMEOUT
+                                                     : STATUS_ERR_INVALID_STATE);
         }
     }
 
     /******* parse data *********/
-    if(!err) {
+    if (!err) {
         cmd_json = cJSON_Parse((const char *)content);
-        
-        if(cmd_json == NULL) {
+
+        if (cmd_json == NULL) {
             log_info(API_TAG, "Error unpacking json");
             err = API_ERR_BAD_JSON;
         }
@@ -1498,86 +1503,95 @@ status_t cmd_post_handler(httpd_req_t *req) {
 
     log_info(API_TAG, "Err 1: %u", err);
 
-    if(!err) {
+    if (!err) {
         cmd_type = cJSON_GetObjectItemCaseSensitive(cmd_json, "cmd_type");
 
-        if(cmd_type == NULL) {
+        if (cmd_type == NULL) {
             err = API_ERR_MISSING_JSON_FIELD;
-        }
-        else if (!cJSON_IsNumber(cmd_type))
-        {
+        } else if (!cJSON_IsNumber(cmd_type)) {
             err = API_ERR_FIELD_NOT_NUMBER;
         }
     }
 
     log_info(API_TAG, "Err 2: %u", err);
 
-
     /********** Parse request *********/
-    if(!err) {
-        switch(cmd_type->valueint) {
-            case CMD_TYPE_INFO:
-                err = handle_info_request(cmd_json, &command_request);
-                break;
-            case CMD_TYPE_GET:
-                err = handle_get_request(cmd_json, &command_request);
-                break;
-            case CMD_TYPE_SET:
-                err = handle_set_request(cmd_json, &command_request);
-                break;
-            case CMD_TYPE_ACT:
-                err = handle_invoke_request(cmd_json, &command_request);
-                break;
+    if (!err) {
+        switch (cmd_type->valueint) {
+            case CMD_TYPE_INFO: err = handle_info_request(cmd_json, &command_request); break;
+            case CMD_TYPE_GET: err = handle_get_request(cmd_json, &command_request); break;
+            case CMD_TYPE_SET: err = handle_set_request(cmd_json, &command_request); break;
+            case CMD_TYPE_ACT: err = handle_invoke_request(cmd_json, &command_request); break;
             case CMD_TYPE_STREAM:
 #ifdef CONFIG_STREAM_ENABLED
-            log_error(API_TAG, "Stream not developed yet");
+                log_error(API_TAG, "Stream not developed yet");
 #else
-            log_error(API_TAG, "Stream not enabled");
+                log_error(API_TAG, "Stream not enabled");
 #endif /** CONFIG_STREAM_ENABLED **/
                 break;
-            default:
-                break;
+            default: break;
         }
     }
 
-
-    if(cmd_json != NULL) {
+    if (cmd_json != NULL) {
         /* we're done with the cmd json, free it */
         cJSON_Delete(cmd_json);
     }
 
     /********** handle Errors **************/
-    if(err) {
-        switch (err)
-        {
+    if (err) {
+        switch (err) {
             case API_ERR_BAD_JSON:
                 err = error_rsp_to_json_string("Invalid JSON", err, response, API_MAX_RESPONSE_LEN);
                 break;
             case API_ERR_FIELD_NOT_NUMBER:
-                err = error_rsp_to_json_string("Field is not a number", err, response, API_MAX_RESPONSE_LEN);
+                err = error_rsp_to_json_string(
+                    "Field is not a number",
+                    err,
+                    response,
+                    API_MAX_RESPONSE_LEN);
                 break;
             case API_ERR_FIELD_NOT_STRING:
-                err = error_rsp_to_json_string("String data not string", err, response, API_MAX_RESPONSE_LEN);
+                err = error_rsp_to_json_string(
+                    "String data not string",
+                    err,
+                    response,
+                    API_MAX_RESPONSE_LEN);
                 break;
             case API_ERR_INVALID_DATA_TYPE:
-                err = error_rsp_to_json_string("Invalid data_t value", err, response, API_MAX_RESPONSE_LEN);
+                err = error_rsp_to_json_string(
+                    "Invalid data_t value",
+                    err,
+                    response,
+                    API_MAX_RESPONSE_LEN);
                 break;
             case API_ERR_MISSING_JSON_FIELD:
-                err = error_rsp_to_json_string("Missing JSON field", err, response, API_MAX_RESPONSE_LEN);
+                err = error_rsp_to_json_string(
+                    "Missing JSON field",
+                    err,
+                    response,
+                    API_MAX_RESPONSE_LEN);
                 break;
             case API_ERR_INVALID_JSON_LENGTH:
-                err = error_rsp_to_json_string("Invalid JSON length", err, response, API_MAX_RESPONSE_LEN);
-                break;            
+                err = error_rsp_to_json_string(
+                    "Invalid JSON length",
+                    err,
+                    response,
+                    API_MAX_RESPONSE_LEN);
+                break;
             default:
-                err = error_rsp_to_json_string("Undefined Error", err, response, API_MAX_RESPONSE_LEN);
+                err = error_rsp_to_json_string(
+                    "Undefined Error",
+                    err,
+                    response,
+                    API_MAX_RESPONSE_LEN);
                 break;
         }
 
-        if(err) {
+        if (err) {
             /** error crafting the response, send internal server error response **/
             return httpd_resp_send_500(req);
-        }
-        else {
+        } else {
             /** send the json error response **/
             httpd_resp_send(req, response, HTTPD_RSTATUS_USE_STRLEN);
         }
@@ -1586,7 +1600,7 @@ status_t cmd_post_handler(httpd_req_t *req) {
         err = STATUS_ERR_INVALID_STATE;
     }
 
-    if(!err) {
+    if (!err) {
         /** copy the http information to the command request **/
         async_resp_arg_t *resp_arg = heap_caps_calloc(1, sizeof(async_resp_arg_t), MALLOC_CAP_8BIT);
         resp_arg->hd = req->handle;
@@ -1598,26 +1612,22 @@ status_t cmd_post_handler(httpd_req_t *req) {
         showmem((uint8_t *)req, 16);
 #endif
         /************  Submit Request  *********/
-        if(xQueueSend(command_queue, &command_request, API_MANAGER_QUEUE_PUT_TIMEOUT) != pdTRUE) {
-            log_info(API_TAG, "Error in writing to queue");            
+        if (xQueueSend(command_queue, &command_request, API_MANAGER_QUEUE_PUT_TIMEOUT) != pdTRUE) {
+            log_info(API_TAG, "Error in writing to queue");
             err = API_ERR_CMD_TIMEOUT;
         }
     }
-    
+
     return err;
 }
-
-
 
 /** Start the http server **/
 static httpd_handle_t http_server_start()
 {
-
     httpd_config_t httpdConf = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t serverHandle = NULL;
 
-    if (httpd_start(&serverHandle, &httpdConf) == STATUS_OK)
-    {
+    if (httpd_start(&serverHandle, &httpdConf) == STATUS_OK) {
         httpd_register_uri_handler(serverHandle, &cmdhandler);
 #ifdef CONFIG_ENABLE_STREAM
         httpd_register_uri_handler(serverHandle, &streamhandler);
@@ -1627,31 +1637,29 @@ static httpd_handle_t http_server_start()
     return serverHandle;
 }
 
-    /****** Global Functions *************/
-
+/****** Global Functions *************/
 
 status_t api_manager_init()
 {
-
     status_t init_status = STATUS_OK;
     server = http_server_start();
     TaskHandle_t apiTaskHandle = NULL;
     respondq = NULL;
     respondq = xQueueCreate(API_MAN_QUEUE_LEN, sizeof(cmd_request_t));
 
-    if (respondq == NULL)
-    {
+    if (respondq == NULL) {
         log_error(API_TAG, "Error creating Queue!");
         init_status = STATUS_ERR_INVALID_STATE;
-    }
-    else if (xTaskCreatePinnedToCore(api_response_task,
-                                     "api_response_task",
-                                     CONFIG_API_MANAGER_TASK_STACK,
-                                     NULL,
-                                     CONFIG_API_MANAGER_TASK_PRIORITY,
-                                     &apiTaskHandle,
-                                     1
-                                    ) != pdTRUE)
+    } else if (
+        xTaskCreatePinnedToCore(
+            api_response_task,
+            "api_response_task",
+            CONFIG_API_MANAGER_TASK_STACK,
+            NULL,
+            CONFIG_API_MANAGER_TASK_PRIORITY,
+            &apiTaskHandle,
+            1)
+        != pdTRUE)
     {
         log_error(API_TAG, "Error creating api task");
         init_status = STATUS_ERR_NO_MEM;

@@ -20,7 +20,7 @@
 #include "esp_types.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
-#include "port/log.h"
+#include "port/port_log.h"
 #include "CircularBuffer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

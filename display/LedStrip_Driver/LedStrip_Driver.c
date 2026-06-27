@@ -19,8 +19,8 @@
 #include "port/error_type.h"
 #include "port/interfaces/rmt.h"
 #include "port/interfaces/spi.h"
-#include "port/log.h"
-#include "port/malloc.h"
+#include "port/port_log.h"
+#include "port/port_malloc.h"
 
 #include <string.h>
 
@@ -224,7 +224,7 @@ static status_t ledstrip_spi_write(LEDSTRIP_h strip)
     for (uint32_t i = 0; i < (strip->write_length / 4); i++) {
         trx.tx_buffer = strip->strand_mem_start + (i * 4);
 
-        txStatus = spi_transaction(strip->interface_handle, &trx);
+        txStatus = spi_transaction(strip->interface_handle, &trx, 1000);
 
         if (txStatus != STATUS_OK) {
             log_error("SPI_TX", "Error in sending %lu bytes [%u]", strip->write_length, txStatus);
@@ -580,7 +580,7 @@ status_t ledstrip_init_apa102(void *strip)
     leds.clock_speed_hz = LEDSTRIP_CONFIG_SPI_FREQ;  // APA claim to have refresh rate of 4KHz,
                                                      // start low.
 
-    err = spi_bus_add_device(sptr->channel, &leds, &sptr->interface_handle);
+    err = spi_init_device(sptr->channel, &leds, &sptr->interface_handle);
     if (err) {
         log_error(LS_TAG, "Error adding SPI device! {%u}", err);
     }

@@ -18,9 +18,9 @@
 #include "freertos/task.h"
 #include "port/error_type.h"
 #include "port/interfaces/spi.h"
-#include "port/log.h"
-#include "port/malloc.h"
-#include "port/types.h"
+#include "port/port_log.h"
+#include "port/port_malloc.h"
+#include "port/port_types.h"
 
 #include <string.h>
 
@@ -242,7 +242,7 @@ static status_t spi_burst_write(VFD_HANDLE dev, uint8_t addr, uint8_t *data, uin
     trx.tx_buffer = buffer;
     trx.flags = 0;
 
-    return spi_device_transmit(dev->spi_handle, &trx);
+    return spi_transaction(dev->spi_handle, &trx, 1000);
 }
 
 static status_t vfd_write_command_with_data(
@@ -391,7 +391,7 @@ VFD_HANDLE vfd_init(VFD_HANDLE handle, vfd_init_t *init)
         dev.flags = (SPI_DEVICE_BIT_LSBFIRST | SPI_DEVICE_3WIRE);
         dev.queue_size = 4;
 
-        err = spi_bus_add_device(handle->spi_bus, &dev, &handle->spi_handle);
+        err = spi_init_device(handle->spi_bus, &dev, &handle->spi_handle);
         if (err) {
             log_error(VFD_TAG, "Error adding device to bus! {%u}", err);
         }

@@ -12,7 +12,7 @@
 
 #include "esp_types.h"
 #include "GenericCommsDriver.h"
-#include "port/log.h"
+#include "port/port_log.h"
 #include "esp_err.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"

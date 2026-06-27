@@ -18,7 +18,7 @@
 #include "nvs_flash.h"
 #include "port/interfaces/spi.h"
 #include "port/interfaces/uart.h"
-#include "port/log.h"
+#include "port/port_log.h"
 #include "port/system.h"
 #include "sdkconfig.h"
 

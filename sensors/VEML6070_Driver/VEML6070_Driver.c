@@ -12,8 +12,8 @@
 #include "GenericCommsDriver.h"
 #include "VEML6070_Driver.h"
 #include "port/error_type.h"
-#include "port/log.h"
-#include "port/types.h"
+#include "port/port_log.h"
+#include "port/port_types.h"
 
 const char *VEML_TAG = "VEML Driver";
 

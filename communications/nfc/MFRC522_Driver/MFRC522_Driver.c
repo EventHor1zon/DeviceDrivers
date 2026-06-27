@@ -88,7 +88,7 @@ static status_t mfrc_read_byte_from_address(MFRC_DEV dev, uint8_t address, uint8
         trx.length = 16;
         trx.rxlength = 16;
 
-        err = spi_transaction(dev->comms_handle, &trx);
+        err = spi_transaction(dev->comms_handle, &trx, 1000);
 #if DEBUG_MODE
         log_info(
             MFRC_TAG,
@@ -129,7 +129,7 @@ static status_t mfrc_write_to_fifo(MFRC_DEV dev, uint8_t length, uint8_t *data)
         trx.flags = 0;
         trx.length = length * 8;
 
-        err = spi_transaction(dev->comms_handle, &trx);
+        err = spi_transaction(dev->comms_handle, &trx, 1000);
 
 #if DEBUG_MODE
         log_info(MFRC_TAG, "Wrote %u bytes from the fifo", length);
@@ -168,7 +168,7 @@ static status_t mfrc_read_from_fifo(MFRC_DEV dev, uint8_t length)
         trx.flags = 0;
         trx.length = length * 8;
 
-        err = spi_transaction(dev->comms_handle, &trx);
+        err = spi_transaction(dev->comms_handle, &trx, 1000);
 
 #if DEBUG_MODE
         log_info(MFRC_TAG, "Read %u bytes from the fifo ", length);
@@ -200,7 +200,7 @@ static status_t mfrc_write_byte_to_address(MFRC_DEV dev, uint8_t address, uint8_
         trx.length = 16;
         trx.rxlength = 0;
 
-        err = spi_transaction(dev->comms_handle, &trx);
+        err = spi_transaction(dev->comms_handle, &trx, 1000);
 #if DEBUG_MODE
         log_info(MFRC_TAG, "Wrote: %02x to address %02x", trx.tx_data[0], trx.tx_data[1] >> 1);
 #endif
@@ -639,7 +639,7 @@ MFRC_DEV mfrc_init(MFRC_DEV handle, mfrc_init_t *init)
         dev.duty_cycle_pos = 128;
         dev.queue_size = 1;
 
-        err = spi_bus_add_device(handle->comms_bus, &dev, &dev_handle);
+        err = spi_init_device(handle->comms_bus, &dev, &dev_handle);
 
         if (err) {
             log_error(MFRC_TAG, "Error adding device to the spi bus! [%u]", err);

@@ -1,23 +1,21 @@
 /***************************************
-* \file     TouchSenseDriver.c
-* \brief    A driver for a touch-sensor manager
-*           Idea: Bool HW/SW, implement both for comparison
-*           Hook up events for long & short presses
-*           Really need to make some touch sensors first!
-* \date     July 2021
-* \author   RJAM
-****************************************/
+ * \file     TouchSenseDriver.c
+ * \brief    A driver for a touch-sensor manager
+ *           Idea: Bool HW/SW, implement both for comparison
+ *           Hook up events for long & short presses
+ *           Really need to make some touch sensors first!
+ * \date     July 2021
+ * \author   RJAM
+ ****************************************/
 
 /********* Includes *******************/
+#include "TouchSenseDriver.h"
 #include "driver/touch_sensor.h"
-#include "port/malloc.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
-#include "freertos/semphr.h"
-
-#include "TouchSenseDriver.h"
-
+#include "port/port_malloc.h"
 
 const char *TSENSE_TAG = "TSENSE";
 
@@ -33,9 +31,8 @@ const char *TSENSE_TAG = "TSENSE";
 
 /****** Global Functions *************/
 
-
-TSENSE_HANDLE touchsense_init(touchsense_init_t *ts_init) {
-
+TSENSE_HANDLE touchsense_init(touchsense_init_t *ts_init)
+{
     gpio_num_t to_init[TOUCHSENSE_MAX_PINS] = {0};
     uint8_t numpins = 0;
     status_t err = STATUS_OK;
@@ -43,34 +40,29 @@ TSENSE_HANDLE touchsense_init(touchsense_init_t *ts_init) {
 
     err = touch_pad_init();
 
-    if(err) {
+    if (err) {
         log_error(TSENSE_TAG, "Error during touchpad init (%u)", err);
     }
 
-    if(!err && ts_init->num_pins <= TOUCHSENSE_MAX_PINS) {    
-        for(int i=0; i<ts_init->num_pins; i++) {
-
-            if(ts_init->touch_pins[i] > 0) {
+    if (!err && ts_init->num_pins <= TOUCHSENSE_MAX_PINS) {
+        for (int i = 0; i < ts_init->num_pins; i++) {
+            if (ts_init->touch_pins[i] > 0) {
                 to_init[i] = ts_init->touch_pins[i];
                 numpins++;
-            }
-            else {
+            } else {
                 log_error("TOUCH", "Error - invalid gpio");
                 err = STATUS_ERR_INVALID_ARG;
             }
-        }    
+        }
     }
 
-    if(!err) {
-        for(int i=0; i<numpins; i++) {
+    if (!err) {
+        for (int i = 0; i < numpins; i++) {
             err = touch_pad_config(to_init);
-            if(err) {
+            if (err) {
                 log_error("TOUCH", "Error configuring touch pad {%u}", err);
                 break;
             }
         }
     }
-    
-    
-
 }

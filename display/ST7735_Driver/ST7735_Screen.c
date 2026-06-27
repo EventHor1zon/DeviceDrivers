@@ -14,8 +14,8 @@
 #include "port/driver/gpio.h"
 #include "port/error_type.h"
 #include "port/interfaces/spi.h"
-#include "port/log.h"
-#include "port/malloc.h"
+#include "port/port_log.h"
+#include "port/port_malloc.h"
 
 #include <string.h>
 
@@ -479,7 +479,7 @@ screen_handle_t *init_screen(st7735_init_t *init)
     dev_cfg.queue_size = 1;
     dev_cfg.flags = (SPI_DEVICE_3WIRE);
 
-    err = spi_bus_add_device(init->spi_bus, &dev_cfg, &handle);
+    err = spi_init_device(init->spi_bus, &dev_cfg, &handle);
 
     if (err) {
         log_error(SCRN_TAG, "Error intialising SPI device [%u]", err);

@@ -7,19 +7,19 @@
                                                           *********************************************************/
 
 #include "APDS9960_Driver.h"
+#include "GenericCommsDriver.h"
 #include "LSM_Driver.h"
 #include "PeripheralManager.h"
 #include "Utilities.h"
 #include "WifiDriver.h"
-#include "port/interfaces/uart.h"
-#include "port/log.h"
-#include "port/interfaces/spi.h"
-#include "port/system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "GenericCommsDriver.h"
 #include "main.h"
 #include "nvs_flash.h"
+#include "port/interfaces/spi.h"
+#include "port/interfaces/uart.h"
+#include "port/port_log.h"
+#include "port/system.h"
 #include "sdkconfig.h"
 
 #include <stdio.h>

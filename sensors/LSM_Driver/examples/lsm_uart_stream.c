@@ -6,19 +6,19 @@
                                                           *
                                                           *********************************************************/
 
+#include "GenericCommsDriver.h"
 #include "LSM_Driver.h"
 #include "PeripheralManager.h"
 #include "Utilities.h"
 #include "WifiDriver.h"
-#include "port/interfaces/uart.h"
-#include "port/log.h"
-#include "port/interfaces/spi.h"
-#include "port/system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "GenericCommsDriver.h"
 #include "main.h"
 #include "nvs_flash.h"
+#include "port/interfaces/spi.h"
+#include "port/interfaces/uart.h"
+#include "port/port_log.h"
+#include "port/system.h"
 #include "sdkconfig.h"
 
 #include <stdio.h>
@@ -259,8 +259,8 @@ void app_main(void)
         // LSM_getAccelY(lsm, &ay);
         // LSM_getAccelZ(lsm, &az);
 
-        // log_info("GX: %.3f GY: %.3f GZ: %.3f \t AX: %.3f AY: %.3f AZ: %.3f\n", gx, gy, gz, ax, ay,
-        // az);
+        // log_info("GX: %.3f GY: %.3f GZ: %.3f \t AX: %.3f AY: %.3f AZ: %.3f\n", gx, gy, gz, ax,
+        // ay, az);
 
         vTaskDelay(pdMS_TO_TICKS(100));
 

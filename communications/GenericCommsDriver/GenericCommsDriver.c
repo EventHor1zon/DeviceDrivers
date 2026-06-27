@@ -17,7 +17,7 @@
 #include "port/interfaces/spi.h"
 #include "port/interfaces/uart.h"
 #include "port/interrupts.h"
-#include "port/log.h"
+#include "port/port_log.h"
 
 /****** Function Prototypes ***********/
 
