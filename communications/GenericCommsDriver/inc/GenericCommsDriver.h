@@ -83,7 +83,7 @@ status_t gcd_i2c_bus_claim(uint8_t i2c_channel);
  **/ 
 status_t gcd_i2c_bus_unclaim(uint8_t i2c_channel);
 
-/** \brief  gcd_i2c_read_address
+/** \brief  i2c_register_read
  *          Perform a read from an address on an i2c channel
  *  \param  i2cChannel - a valid i2cChannel 
  *  \param  deviceAddr - the i2c address (unshifted) of the device
@@ -93,9 +93,9 @@ status_t gcd_i2c_bus_unclaim(uint8_t i2c_channel);
  * 
  *  \return ESP_OK or error
  * **/
-status_t gcd_i2c_read_address(uint8_t i2cChannel, uint8_t deviceAddr, uint8_t regAddr, uint16_t readLen, uint8_t *rxBuffer);
+status_t i2c_register_read(uint8_t i2cChannel, uint8_t deviceAddr, uint8_t regAddr, uint16_t readLen, uint8_t *rxBuffer);
 
-/** \brief  gcd_i2c_write_address
+/** \brief  i2c_register_write
  *          Perform a read from an address on an i2c channel
  *  \param  i2cChannel - a valid i2cChannel 
  *  \param  deviceAddr - the i2c address (unshifted) of the device
@@ -105,7 +105,7 @@ status_t gcd_i2c_read_address(uint8_t i2cChannel, uint8_t deviceAddr, uint8_t re
  * 
  *  \return ESP_OK or error
  * **/
-status_t gcd_i2c_write_address(uint8_t i2cChannel, uint8_t deviceAddr, uint8_t regAddr, uint16_t writeLen, uint8_t *txBuffer);
+status_t i2c_register_write(uint8_t i2cChannel, uint8_t deviceAddr, uint8_t regAddr, uint16_t writeLen, uint8_t *txBuffer);
 
 
 /** \brief gcd_i2c_write_block

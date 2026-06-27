@@ -24,16 +24,16 @@
  ****************************************/
 
 /********* Includes *******************/
+#include "GenericCommsDriver.h"
 #include "LSM_Driver.h"
 #include "Utilities.h"
-#include "port/driver/gpio.h"
-#include "port/error_type.h"
-#include "port/malloc.h"
-#include "port/log.h"
-#include "port/types.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "GenericCommsDriver.h"
+#include "port/driver/gpio.h"
+#include "port/error_type.h"
+#include "port/log.h"
+#include "port/malloc.h"
+#include "port/types.h"
 
 #include <math.h>
 #include <string.h>
@@ -386,7 +386,7 @@ void print_i2c_register(LSM_DriverHandle_t *dev, uint8_t reg)
 {
     uint8_t val = 0;
 
-    STATUS_ERROR_CHECK(gcd_i2c_read_address(dev->commsChannel, dev->devAddr, reg, 1, &val));
+    STATUS_ERROR_CHECK(i2c_register_read(dev->commsChannel, dev->devAddr, reg, 1, &val));
 
     log_info("Register %02x contents: \n", reg);
     printBytesOrderExplicit(val);
@@ -414,8 +414,8 @@ static void convert_single_packet(LSM_DriverHandle_t *dev, int16_t *input, float
 
             case LSM_PKT_ELM_T_GYRO:
                 output[output_index] = (float)input[input_index] * desc->gyro_factor;
-                // log_info("decoding gyro packet index %u input %u : ouput %.2f : factor: %.2f\n", i,
-                // input[input_index], output[output_index], desc->gyro_factor);
+                // log_info("decoding gyro packet index %u input %u : ouput %.2f : factor: %.2f\n",
+                // i, input[input_index], output[output_index], desc->gyro_factor);
                 input_index++;
                 output_index++;
                 break;
@@ -506,7 +506,7 @@ static uint16_t LSM_fifoPattern_index(LSM_DriverHandle_t *dev)
 {
     uint8_t regVals[2] = {0, 0};
     STATUS_ERROR_CHECK(
-        gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_FIFO_STATUS3_REG, 2, regVals));
+        i2c_register_read(dev->commsChannel, dev->devAddr, LSM_FIFO_STATUS3_REG, 2, regVals));
 
     uint16_t pattern = (((uint16_t)regVals[1] << 8) | regVals[0]);
     return pattern;
@@ -517,7 +517,7 @@ static status_t LSM_waitSampleReady(LSM_DriverHandle_t *dev, uint8_t mask)
     status_t status = STATUS_OK;
     uint8_t regVal = 0, tries = 0;
     while (!(regVal & mask)) {
-        status = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regVal);
+        status = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regVal);
         tries++;
         if (tries > LSM_DRIVER_SAMPLE_WAIT_READTRIES) {
             status = STATUS_ERR_INVALID_RESPONSE;
@@ -532,14 +532,14 @@ static status_t LSM_getWhoAmI(LSM_DriverHandle_t *device, uint8_t *whoami)
 {
     status_t status = STATUS_OK;
 
-    status = gcd_i2c_read_address(device->commsChannel, device->devAddr, LSM_WHOAMI_REG, 1, whoami);
+    status = i2c_register_read(device->commsChannel, device->devAddr, LSM_WHOAMI_REG, 1, whoami);
 
     return status;
 }
 
 static status_t LSM_getStatusRegister(LSM_DriverHandle_t *dev, uint8_t *regval)
 {
-    return gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, regval);
+    return i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, regval);
 }
 
 static status_t LSM_reset_fifo(LSM_DriverHandle_t *dev)
@@ -547,21 +547,16 @@ static status_t LSM_reset_fifo(LSM_DriverHandle_t *dev)
     status_t err = STATUS_OK;
     uint8_t regval = 0;
     uint8_t blank = 0;
-    if (gcd_i2c_read_address(device->commsChannel, device->devAddr, LSM_FIFO_CTRL5_REG, 1, &regval)
+    if (i2c_register_read(device->commsChannel, device->devAddr, LSM_FIFO_CTRL5_REG, 1, &regval)
             != STATUS_OK
-        || gcd_i2c_write_address(
-               device->commsChannel,
-               device->devAddr,
-               LSM_FIFO_CTRL5_REG,
-               1,
-               &blank)
+        || i2c_register_write(device->commsChannel, device->devAddr, LSM_FIFO_CTRL5_REG, 1, &blank)
                != STATUS_OK)
     {
         log_error("LSM_Driver", "Error setting fifo registers");
         err = STATUS_ERR_INVALID_RESPONSE;
     } else {
         vTaskDelay(pdMS_TO_TICKS(GENERIC_I2C_COMMS_SHORTWAIT_MS));
-        err = gcd_i2c_write_address(
+        err = i2c_register_write(
             device->commsChannel,
             device->devAddr,
             LSM_FIFO_CTRL5_REG,
@@ -643,7 +638,7 @@ static status_t process_interrupts(LSM_DriverHandle_t *dev, uint32_t sources)
     }
 
     if (check_devrdy) {
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
         if (!err && regval & LSM_CTRL3_BOOT_BIT) {
             dev->status.device_rdy = true;
             log_info("LSM", "Device boot ready");
@@ -651,12 +646,7 @@ static status_t process_interrupts(LSM_DriverHandle_t *dev, uint32_t sources)
     }
 
     if (check_fifo) {
-        err = gcd_i2c_read_address(
-            dev->commsChannel,
-            dev->devAddr,
-            LSM_FIFO_STATUS2_REG,
-            1,
-            &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_FIFO_STATUS2_REG, 1, &regval);
         if (!err) {
             dev->status.fifo_thresh = (regval & LSM_FIFO2_WATERMARK_BIT) ? true : false;
             dev->status.fifo_ovr = (regval & LSM_FIFO2_OVRRUN_BIT) ? true : false;
@@ -731,7 +721,7 @@ static int16_t syncronise_packets(LSM_DriverHandle_t *dev, uint16_t packet_len)
         base = index;
         for (i = 0; index > 0; i++) {
             /** read through the fifo until index becomes zero... **/
-            gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_FIFO_DATA_LSB_REG, 2, raw);
+            i2c_register_read(dev->commsChannel, dev->devAddr, LSM_FIFO_DATA_LSB_REG, 2, raw);
             index = LSM_fifoPattern_index(dev);
             if (index == 0) {
                 /** reached end of packets **/
@@ -1030,7 +1020,8 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
                 if (initStatus == STATUS_OK) {
                     if (initData->int1Pin) {
-                        STATUS_ERROR_CHECK(gpio_isr_handler_add(initData->int1Pin, ISR_int1, device));
+                        STATUS_ERROR_CHECK(
+                            gpio_isr_handler_add(initData->int1Pin, ISR_int1, device));
                         log_info(
                             "Added interrupt handler to pin %u : 0x%p\n",
                             initData->int1Pin,
@@ -1039,7 +1030,8 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                         device->int1En = 1;
                     }
                     if (initData->int2Pin) {
-                        STATUS_ERROR_CHECK(gpio_isr_handler_add(initData->int2Pin, ISR_int2, device));
+                        STATUS_ERROR_CHECK(
+                            gpio_isr_handler_add(initData->int2Pin, ISR_int2, device));
                         device->i2Pin = initData->int2Pin;
                         device->int2En = 1;
                     }
@@ -1153,7 +1145,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
     status_t LSM_reset_device(LSM_DriverHandle_t * dev)
     {
         uint8_t regval = 0;
-        status_t err = gcd_i2c_read_address(
+        status_t err = i2c_register_read(
             dev->commsChannel,
             dev->devAddr,
             LSM_CTRL3_C_REG,
@@ -1161,12 +1153,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             &regval);
         if (!err) {
             regval |= 1;
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL3_C_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
         }
 
         return err;
@@ -1175,7 +1162,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
     status_t LSM_reboot_memory(LSM_DriverHandle_t * dev)
     {
         uint8_t regval = 0;
-        status_t err = gcd_i2c_read_address(
+        status_t err = i2c_register_read(
             dev->commsChannel,
             dev->devAddr,
             LSM_CTRL3_C_REG,
@@ -1183,12 +1170,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             &regval);
         if (!err) {
             regval |= LSM_CTRL3_BOOT_BIT;
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL3_C_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
         }
 
         return err;
@@ -1211,34 +1193,34 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
         log_info("LSM Driver", "INFO: Running Accelerometer Self-Test! \
              Please keep the device still for the next several seconds...");
-        status_t err = gcd_i2c_write_address(
+        status_t err = i2c_register_write(
             dev->commsChannel,
             dev->devAddr,
             LSM_CTRL1_XL_REG,
             1,
             &regval);
         regval = 0;
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL2_G_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL2_G_REG, 1, &regval);
         regval = 0x44;
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
         regval = 0;
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL5_C_REG, 1, &regval);
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL6_C_REG, 1, &regval);
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL5_C_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL6_C_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
         regval = 0x38;
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL9_XL_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL9_XL_REG, 1, &regval);
         regval = 0;
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL10_C_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL10_C_REG, 1, &regval);
 
         /** wait for new data to arrive **/
         vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS));
-        err += gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
         if (!(regval & 1)) {
             while (!(regval & 1)) {
                 vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS));
-                err += gcd_i2c_read_address(
+                err += i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_STATUS_REG,
@@ -1253,20 +1235,15 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
         }
         /** read & discard the first data sets **/
-        err += gcd_i2c_read_address(
-            dev->commsChannel,
-            dev->devAddr,
-            LSM_ACCELX_LSB_REG,
-            6,
-            temp_data);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_ACCELX_LSB_REG, 6, temp_data);
 
         /** wait for new data **/
         vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS));
-        err += gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
         if (!(regval & 1)) {
             while (!(regval & 1)) {
                 vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS));
-                err += gcd_i2c_read_address(
+                err += i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_STATUS_REG,
@@ -1283,12 +1260,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
         memset(temp_data, '0', sizeof(uint8_t) * 6);
         /** read & store the new data set **/
-        err += gcd_i2c_read_address(
-            dev->commsChannel,
-            dev->devAddr,
-            LSM_ACCELX_LSB_REG,
-            6,
-            temp_data);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_ACCELX_LSB_REG, 6, temp_data);
 
         if (err) {
             log_error("LSM Driver", "There has been a comms error - quitting self-test!");
@@ -1309,16 +1281,16 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
         /** enable self test **/
         regval = 1;
-        err += gcd_i2c_write_address(dev->commsChannel, dev->devAddr, LSM_CTRL5_C_REG, 1, &regval);
+        err += i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL5_C_REG, 1, &regval);
 
         vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS * 4));
 
         /** wait for new data **/
-        err += gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
         if (!(regval & 1)) {
             while (!(regval & 1)) {
                 vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS));
-                err += gcd_i2c_read_address(
+                err += i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_STATUS_REG,
@@ -1332,21 +1304,16 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
         }
         /** read & toss data **/
-        err += gcd_i2c_read_address(
-            dev->commsChannel,
-            dev->devAddr,
-            LSM_ACCELX_LSB_REG,
-            6,
-            temp_data);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_ACCELX_LSB_REG, 6, temp_data);
 
         vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS * 4));
 
         /** wait for new data **/
-        err += gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regval);
         if (!(regval & 1)) {
             while (!(regval & 1)) {
                 vTaskDelay(pdMS_TO_TICKS(LSM_SELF_TEST_DATA_QWR_MS));
-                err += gcd_i2c_read_address(
+                err += i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_STATUS_REG,
@@ -1360,12 +1327,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
         }
 
-        err += gcd_i2c_read_address(
-            dev->commsChannel,
-            dev->devAddr,
-            LSM_ACCELX_LSB_REG,
-            6,
-            temp_data);
+        err += i2c_register_read(dev->commsChannel, dev->devAddr, LSM_ACCELX_LSB_REG, 6, temp_data);
 
         if (err) {
             log_error("LSM Driver", "There has been a comms error - quitting self-test!");
@@ -1460,12 +1422,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regVals[2] = {0};
         uint8_t writeVals[2] = {0};
         uint8_t m = *mode;
-        status = gcd_i2c_read_address(
-            dev->commsChannel,
-            dev->devAddr,
-            LSM_CTRL9_XL_REG,
-            2,
-            regVals);
+        status = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL9_XL_REG, 2, regVals);
 
         /** enable all axis for eac dev **/
         if (m == LSM_OPMODE_ACCEL_ONLY) {
@@ -1488,7 +1445,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         }
 
         if (status == STATUS_OK) {
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_CTRL9_XL_REG,
@@ -1520,7 +1477,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             status = STATUS_ERR_INVALID_ARG;
         } else {
             /** get axis enabled status */
-            status = gcd_i2c_read_address(
+            status = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_CTRL9_XL_REG,
@@ -1536,11 +1493,11 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                     "LSM_Driver",
                     "Writing %02x to Accel ctrl reg (Enabling accel axis)",
                     accelEn);
-                status = gcd_i2c_write_address(1, LSM_I2C_ADDR, LSM_CTRL9_XL_REG, 1, &accelEn);
+                status = i2c_register_write(1, LSM_I2C_ADDR, LSM_CTRL9_XL_REG, 1, &accelEn);
             }
 
             /** get register value, clear mode & set new **/
-            status = gcd_i2c_read_address(
+            status = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_CTRL1_XL_REG,
@@ -1549,7 +1506,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             regVal &= 0b1111;
 
             regVal |= (mode << 4);
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_CTRL1_XL_REG,
@@ -1583,7 +1540,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             log_info("LSM_Driver", "Setting Gyro ODR to %u\n", mode);
 
             /** get axis enabled status */
-            status = gcd_i2c_read_address(
+            status = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_CTRL10_C_REG,
@@ -1594,7 +1551,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                 gyro_en |=
                     ((LSM_CTRL10_GYRO_Z_EN_BIT) | (LSM_CTRL10_GYRO_Y_EN_BIT)
                      | (LSM_CTRL10_GYRO_X_EN_BIT));
-                status = gcd_i2c_write_address(
+                status = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL10_C_REG,
@@ -1602,7 +1559,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                     &gyro_en);
             }
             /** get register value, clear mode & set new **/
-            status = gcd_i2c_read_address(
+            status = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_CTRL2_G_REG,
@@ -1611,7 +1568,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             regVal &= 0b1111;
             regVal |= (mode << 4);
 
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_CTRL2_G_REG,
@@ -1641,23 +1598,13 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         if (f > LSM_ACCSCALE_8G) {
             err = STATUS_ERR_INVALID_ARG;
         } else {
-            err = gcd_i2c_read_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL1_XL_REG,
-                1,
-                &regval);
+            err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL1_XL_REG, 1, &regval);
         }
 
         if (!err) {
             regval &= 0b11110011;
             regval |= f << 2;
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL1_XL_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL1_XL_REG, 1, &regval);
         }
 
         if (!err) {
@@ -1684,12 +1631,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         if (f > LSM_GYRO_SCALE_125DPS) {
             err = STATUS_ERR_INVALID_ARG;
         } else {
-            err = gcd_i2c_read_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL2_G_REG,
-                1,
-                &regval);
+            err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL2_G_REG, 1, &regval);
         }
 
         if (!err) {
@@ -1699,12 +1641,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             } else {
                 regval |= (f << 2);
             }
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL1_XL_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL1_XL_REG, 1, &regval);
         }
 
         if (!err) {
@@ -1728,19 +1665,14 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         status_t err = STATUS_OK;
         bool value = *val;
         uint8_t regval = 0;
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
         if (!err) {
             if (value) {
                 regval |= (value << 4);
             } else {
                 regval &= ~(value << 4);
             }
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL3_C_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL3_C_REG, 1, &regval);
         }
 
         return err;
@@ -1771,7 +1703,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         bool e = *en;
         bool wr = false;
         uint8_t regval = 0;
-        status_t err = gcd_i2c_read_address(
+        status_t err = i2c_register_read(
             dev->commsChannel,
             dev->devAddr,
             LSM_CTRL3_C_REG,
@@ -1788,7 +1720,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL3_C_REG,
@@ -1811,16 +1743,14 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         return status;
     }
 
-    status_t LSM_set_accel_bw_select_mode(
-        LSM_DriverHandle_t * dev,
-        LSM_AccelBandwidthMode_t * mode)
+    status_t LSM_set_accel_bw_select_mode(LSM_DriverHandle_t * dev, LSM_AccelBandwidthMode_t * mode)
     {
         status_t err = STATUS_OK;
         uint8_t m = *mode;
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
 
         if (!err) {
             if (m && !(regval & LSM_CTRL4_ACCEL_BW_SEL_BIT)) {
@@ -1831,12 +1761,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                 wr = true;
             }
 
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL4_C_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
         }
 
         if (!err) {
@@ -1846,9 +1771,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         return err;
     }
 
-    status_t LSM_get_accel_bw_select_mode(
-        LSM_DriverHandle_t * dev,
-        LSM_AccelBandwidthMode_t * mode)
+    status_t LSM_get_accel_bw_select_mode(LSM_DriverHandle_t * dev, LSM_AccelBandwidthMode_t * mode)
     {
         status_t status = STATUS_OK;
         *mode = dev->settings.accel_bw_mode;
@@ -1862,7 +1785,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
 
         if (!err) {
             if (m && !(regval & LSM_CTRL4_GYRO_SLEEP_BIT)) {
@@ -1873,7 +1796,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                 wr = true;
             }
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL4_C_REG,
@@ -1903,7 +1826,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
 
         if (!err) {
             if (m && !(regval & LSM_CTRL4_ALL_ISR_PAD1_BIT)) {
@@ -1915,7 +1838,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL4_C_REG,
@@ -1946,7 +1869,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL4_FIFO_TEMP_EN_BIT)) {
@@ -1958,7 +1881,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL4_C_REG,
@@ -1988,7 +1911,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL4_C_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL4_FIFO_THRLD_EN_BIT)) {
@@ -2000,7 +1923,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL4_C_REG,
@@ -2035,7 +1958,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL7_GYRO_HPMODE_DISABLE_BIT)) {
@@ -2047,7 +1970,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL7_G_REG,
@@ -2077,7 +2000,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL7_GYRO_HIPASS_EN_BIT)) {
@@ -2089,7 +2012,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL7_G_REG,
@@ -2123,23 +2046,13 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         if (m > LSM_GYRO_HPCUTOFF_16_3HZ) {
             err = STATUS_ERR_INVALID_ARG;
         } else {
-            err = gcd_i2c_read_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL7_G_REG,
-                1,
-                &regval);
+            err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
         }
 
         if (!err) {
             regval &= 0b11111100;
             regval |= m;
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL7_G_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL7_G_REG, 1, &regval);
         }
 
         if (!err) {
@@ -2165,7 +2078,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL8_ACCEL_LPF2_EN_BIT)) {
@@ -2177,7 +2090,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL8_XL_REG,
@@ -2211,23 +2124,13 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         if (m > LSM_HPLP_ODR_400) {
             err = STATUS_ERR_INVALID_ARG;
         } else {
-            err = gcd_i2c_read_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL8_XL_REG,
-                1,
-                &regval);
+            err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
         }
 
         if (!err) {
             regval &= 0b11111100;
             regval |= m;
-            err = gcd_i2c_write_address(
-                dev->commsChannel,
-                dev->devAddr,
-                LSM_CTRL8_XL_REG,
-                1,
-                &regval);
+            err = i2c_register_write(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
         }
 
         if (!err) {
@@ -2253,7 +2156,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL8_ACCEL_HPSLOPE_EN_BIT)) {
@@ -2265,7 +2168,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL8_XL_REG,
@@ -2295,7 +2198,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL8_XL_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL8_ACCEL_6D_LOWPASS_EN_BIT)) {
@@ -2307,7 +2210,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL8_XL_REG,
@@ -2337,7 +2240,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_CTRL10_C_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_CTRL10_C_REG, 1, &regval);
 
         if (!err) {
             if (e && !(regval & LSM_CTRL10_EMBEDDED_FUNC_EN_BIT)) {
@@ -2349,7 +2252,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             }
 
             if (wr) {
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_CTRL10_C_REG,
@@ -2382,11 +2285,11 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint32_t len = 0;
         /** check the status bit */
 
-        status = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regVal);
+        status = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regVal);
 
         switch (dev->settings.opMode) {
             case LSM_OPMODE_ACCEL_ONLY:
-                status = gcd_i2c_read_address(
+                status = i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_ACCELX_LSB_REG,
@@ -2397,7 +2300,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
             case LSM_OPMODE_GYRO_ONLY:
 
-                status = gcd_i2c_read_address(
+                status = i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_GYROX_LSB_REG,
@@ -2408,13 +2311,13 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
             case LSM_OPMODE_GYRO_ACCEL:
 
-                status = gcd_i2c_read_address(
+                status = i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_GYROX_LSB_REG,
                     6,
                     dev->measurements.rawGyro);
-                status = gcd_i2c_read_address(
+                status = i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_ACCELX_LSB_REG,
@@ -2427,7 +2330,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             default: break;
         }
 
-        status = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regVal);
+        status = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_STATUS_REG, 1, &regVal);
 
         return status;
     }
@@ -2436,7 +2339,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
     {
         status_t status = STATUS_OK;
 
-        status = gcd_i2c_read_address(
+        status = i2c_register_read(
             dev->commsHandle,
             dev->devAddr,
             LSM_TEMP_LSB_REG,
@@ -2505,7 +2408,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         status_t err = STATUS_OK;
         uint8_t raw[2] = {0};
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_FIFO_STATUS3_REG, 2, raw);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_FIFO_STATUS3_REG, 2, raw);
         if (!err) {
             *index = ((((uint16_t)raw[1] << 8) & 0b11) | (uint16_t)raw[0]);
         }
@@ -2522,7 +2425,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_FIFO_CTRL2_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_FIFO_CTRL2_REG, 1, &regval);
         if (!err) {
             if (!e && (regval & LSM_FIFOCTRL2_PEDOTMR_FIFO_EN_BIT)) {
                 regval &= ~(LSM_FIFOCTRL2_PEDOTMR_FIFO_EN_BIT);
@@ -2534,7 +2437,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         }
 
         if (!err && wr) {
-            err = gcd_i2c_write_address(
+            err = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL2_REG,
@@ -2563,7 +2466,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_FIFO_CTRL4_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_FIFO_CTRL4_REG, 1, &regval);
         if (!err) {
             if (!e && (regval & LSM_FIFOCTRL4_MSBONLY_EN_BIT)) {
                 regval &= ~(LSM_FIFOCTRL4_MSBONLY_EN_BIT);
@@ -2575,7 +2478,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         }
 
         if (!err && wr) {
-            err = gcd_i2c_write_address(
+            err = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL4_REG,
@@ -2604,7 +2507,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t msbMask = 0b1111;
         uint16_t fifoCount = 0;
 
-        status = gcd_i2c_read_address(
+        status = i2c_register_read(
             dev->commsChannel,
             (uint8_t)LSM_I2C_ADDR,
             LSM_FIFO_STATUS1_REG,
@@ -2627,7 +2530,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t regval = 0;
         bool wr = false;
 
-        err = gcd_i2c_read_address(dev->commsChannel, dev->devAddr, LSM_FIFO_CTRL2_REG, 1, &regval);
+        err = i2c_register_read(dev->commsChannel, dev->devAddr, LSM_FIFO_CTRL2_REG, 1, &regval);
         if (!err) {
             if (!e && (regval & LSM_FIFOCTRL2_PEDOTMR_DRDY_BIT)) {
                 regval &= ~(LSM_FIFOCTRL2_PEDOTMR_DRDY_BIT);
@@ -2639,7 +2542,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         }
 
         if (!err && wr) {
-            err = gcd_i2c_write_address(
+            err = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL2_REG,
@@ -2673,7 +2576,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
         else
         {
-            err = gcd_i2c_read_address(
+            err = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL4_REG,
@@ -2682,7 +2585,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             if (!err) {
                 regval &= 0b11000111;
                 regval |= (d << 3);
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_FIFO_CTRL4_REG,
@@ -2734,7 +2637,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         }
 
         if (!err) {
-            err = gcd_i2c_read_address(
+            err = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL5_REG,
@@ -2745,7 +2648,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                 regval |= (o << 3);
                 log_info("Setting Fifo ODR to :\n");
                 printBytesOrderExplicit(regval);
-                err = gcd_i2c_write_address(
+                err = i2c_register_write(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_FIFO_CTRL5_REG,
@@ -2776,9 +2679,8 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
         if (mode == LSM_FIFO_MODE_BYPASS || /** because several reserved values, have to do this the
                                                long way... **/
-            mode == LSM_FIFO_MODE_FIFO
-            || mode == LSM_FIFO_MODE_CONT_TO_FIFO || mode == LSM_FIFO_MODE_BYPASS_TO_FIFO
-            || mode == LSM_FIFO_MODE_CONTINUOUS)
+            mode == LSM_FIFO_MODE_FIFO || mode == LSM_FIFO_MODE_CONT_TO_FIFO
+            || mode == LSM_FIFO_MODE_BYPASS_TO_FIFO || mode == LSM_FIFO_MODE_CONTINUOUS)
         {
             writevalue = mode;
         } else {
@@ -2786,7 +2688,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         }
 
         if (status == STATUS_OK) {
-            status = gcd_i2c_read_address(
+            status = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL5_REG,
@@ -2794,7 +2696,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                 &regvalue);
             regvalue &= (0b11111000); /** clear low 3 bits **/
             writevalue |= regvalue;   /** set mode **/
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL5_REG,
@@ -2834,14 +2736,14 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             uint8_t writeval[2] = {0, 0};
             writeval[0] = (uint8_t)val;
             writeval[1] = (uint8_t)(val >> 8);
-            status_t status = gcd_i2c_read_address(
+            status_t status = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL2_REG,
                 1,
                 &regval);
             writeval[1] |= regval;
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_CTRL1_REG,
@@ -2951,28 +2853,28 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
          *  then copy fifo5 settings, zero the fifo5 and write back in order to
          *   clear the fifo for use with new packets
          ***/
-        if (gcd_i2c_write_address(
+        if (i2c_register_write(
                 device->commsChannel,
                 device->devAddr,
                 LSM_FIFO_CTRL3_REG,
                 1,
                 &writeA)
                 != STATUS_OK
-            || gcd_i2c_write_address(
+            || i2c_register_write(
                    device->commsChannel,
                    device->devAddr,
                    LSM_FIFO_CTRL4_REG,
                    1,
                    &writeB)
                    != STATUS_OK
-            || gcd_i2c_read_address(
+            || i2c_register_read(
                    device->commsChannel,
                    device->devAddr,
                    LSM_FIFO_CTRL5_REG,
                    1,
                    &regVal)
                    != STATUS_OK
-            || gcd_i2c_write_address(
+            || i2c_register_write(
                    device->commsChannel,
                    device->devAddr,
                    LSM_FIFO_CTRL5_REG,
@@ -2984,7 +2886,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             status = STATUS_ERR_INVALID_RESPONSE;
         } else {
             vTaskDelay(pdMS_TO_TICKS(GENERIC_I2C_COMMS_SHORTWAIT_MS));
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 device->commsChannel,
                 device->devAddr,
                 LSM_FIFO_CTRL5_REG,
@@ -3058,7 +2960,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
 
             for (int j = 0; j < full_packets; j++) {
                 /** read a single packet **/
-                err = gcd_i2c_read_address(
+                err = i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_FIFO_DATA_LSB_REG,
@@ -3090,7 +2992,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             uint16_t remainder = bytes_available > chunk_size ? bytes_available % chunk_size : 0;
             /** chunk the fifo read **/
             for (int j = 0; j < bytes_available; j += chunk_size) {
-                err = gcd_i2c_read_address(
+                err = i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_FIFO_DATA_LSB_REG,
@@ -3104,7 +3006,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
                 }
             }
             if (!err && remainder > 0) {
-                err = gcd_i2c_read_address(
+                err = i2c_register_read(
                     dev->commsChannel,
                     dev->devAddr,
                     LSM_FIFO_DATA_LSB_REG,
@@ -3124,7 +3026,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
              * even a fifo reset doesn't fix ?
              **/
             bytes_available = samples_available * 2;
-            err = gcd_i2c_read_address(
+            err = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_DATA_LSB_REG,
@@ -3167,7 +3069,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
             LSM_get_fifo_pkt_count(dev, &avail);
             uint16_t bytes_avail = 2 * avail;
 
-            status = gcd_i2c_read_address(
+            status = i2c_register_read(
                 dev->commsChannel,
                 dev->devAddr,
                 LSM_FIFO_DATA_LSB_REG,
@@ -3194,7 +3096,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t intr = *int_t;
 
         if (device->i1Pin > 0) {
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 device->commsChannel,
                 device->devAddr,
                 LSM_INT1_CTRL_REG,
@@ -3220,7 +3122,7 @@ LSM_DriverHandle_t *LSM_init(LSMDEV device, LSM_initData_t *initData)
         uint8_t intr = *int_t;
 
         if (device->i2Pin > 0) {
-            status = gcd_i2c_write_address(
+            status = i2c_register_write(
                 device->commsChannel,
                 device->devAddr,
                 LSM_INT2_CTRL_REG,

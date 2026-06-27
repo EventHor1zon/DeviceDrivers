@@ -776,7 +776,7 @@ status_t cbuffer_start_task(
  * to be replaced by smarter methods
  *
  */
-
+#if 0
 status_t cbuffer_read_i2c_pattern_block(CBuff handle, gcd_transaction_t *trx)
 {
     status_t err = STATUS_OK;
@@ -818,7 +818,7 @@ status_t cbuffer_read_i2c_pattern_block(CBuff handle, gcd_transaction_t *trx)
          */
         while (n_chunks) {
             memset(middle_buffer, 0, sizeof(uint8_t) * CBUFFER_CHUNK_READ_SIZE);
-            err = gcd_i2c_read_address(trx->bus, trx->dev, trx->reg, read_len, middle_buffer);
+            err = i2c_register_read(trx->bus, trx->dev, trx->reg, read_len, middle_buffer);
             if (err) {
                 log_error(CBUFF_TAG, "Error during buffer read - exiting");
                 break;
@@ -962,3 +962,5 @@ status_t cbuff_dump_uart(CBuff handle, uint8_t bus, uint32_t len)
 
     return err;
 }
+
+#endif /** TODO: Remove */

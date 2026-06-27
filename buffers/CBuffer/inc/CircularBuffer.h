@@ -11,6 +11,8 @@
 #define CBUFFER_SEMTAKE_TIMEOUT 200 /**< in ms, doesn't need to be big **/
 
 /********* Includes ********************/
+#include "port/error_types.h"
+
 #include <stdint.h>
 
 /********* Definitions *****************/
@@ -45,14 +47,6 @@ typedef struct cbuffer_event_settings {
 } cbuffer_events_t;
 
 #endif /** CONFIG_USE_EVENTS **/
-
-typedef enum __attribute__((short)) {
-    STATUS_OK = 0,
-    STATUS_ERR_INVALID_ARG,
-    STATUS_ERR_NO_MEM,
-    STATUS_ERR_TIMEOUT,
-
-} status_t;
 
 /** the cbuffer handle data structure **/
 typedef struct CBuffer_Handle {

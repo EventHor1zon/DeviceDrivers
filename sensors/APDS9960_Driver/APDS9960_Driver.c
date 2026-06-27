@@ -13,14 +13,14 @@
 /********* Includes *******************/
 
 #include "APDS9960_Driver.h"
+#include "GenericCommsDriver.h"
 #include "Utilities.h"
-#include "port/driver/gpio.h"
-#include "port/error_type.h"
-#include "port/malloc.h"
-#include "port/log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "GenericCommsDriver.h"
+#include "port/driver/gpio.h"
+#include "port/error_type.h"
+#include "port/log.h"
+#include "port/malloc.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -229,21 +229,19 @@ IRAM_ATTR void apds_intr_handler(void *args)
 
 /****** Private Functions *************/
 
-
-
 /** Sets the BITS in mask **/
 static status_t regSetMask(APDS_DEV dev, uint8_t regaddr, uint8_t mask)
 {
     status_t err = STATUS_OK;
     uint8_t regval = 0;
 
-    err = gcd_i2c_read_address(dev->bus, dev->addr, regaddr, 1, &regval);
+    err = i2c_register_read(dev->bus, dev->addr, regaddr, 1, &regval);
 
     if (!err) {
         // check if mask is already set
         if ((regval & mask) != mask) {
             regval |= mask;
-            err = gcd_i2c_write_address(dev->bus, dev->addr, regaddr, 1, &regval);
+            err = i2c_register_write(dev->bus, dev->addr, regaddr, 1, &regval);
         }
     }
 
@@ -256,11 +254,11 @@ static status_t regUnsetMask(APDS_DEV dev, uint8_t regaddr, uint8_t mask)
     status_t err = STATUS_OK;
     uint8_t regval = 0;
 
-    err = gcd_i2c_read_address(dev->bus, dev->addr, regaddr, 1, &regval);
+    err = i2c_register_read(dev->bus, dev->addr, regaddr, 1, &regval);
 
     if (!err) {
         regval &= ~(mask);
-        err = gcd_i2c_write_address(dev->bus, dev->addr, regaddr, 1, &regval);
+        err = i2c_register_write(dev->bus, dev->addr, regaddr, 1, &regval);
     }
 
     return err;
@@ -271,12 +269,12 @@ static status_t readModWrite(APDS_DEV dev, uint8_t regaddr, uint8_t clear_mask, 
     status_t err = STATUS_OK;
     uint8_t regval;
 
-    err = gcd_i2c_read_address(dev->bus, dev->addr, regaddr, 1, &regval);
+    err = i2c_register_read(dev->bus, dev->addr, regaddr, 1, &regval);
 
     if (!err) {
         replaceBits(&regval, clear_mask, set_mask);
 
-        err = gcd_i2c_write_address(dev->bus, dev->addr, regaddr, 1, &regval);
+        err = i2c_register_write(dev->bus, dev->addr, regaddr, 1, &regval);
     }
 
     return err;
@@ -289,19 +287,19 @@ static uint8_t get_interrupt_source_and_clear(APDS_DEV dev)
     uint8_t regval = 0;
     uint8_t retval = 0;
     uint8_t clear = 1;
-    err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_STATUS, 1, &regval);
+    err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_STATUS, 1, &regval);
     if (!err) {
         if (regval & APDS_REGBIT_PRX_INT) {
             retval |= APDS_REGBIT_PRX_INT;
-            gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_PRX_ISR_CLR, 1, &clear);
+            i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_PRX_ISR_CLR, 1, &clear);
         }
         if (regval & APDS_REGBIT_ALS_INT) {
             retval |= APDS_REGBIT_ALS_INT;
-            gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_ALS_ISR_CLR, 1, &clear);
+            i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_ALS_ISR_CLR, 1, &clear);
         }
         // if(regval & APDS_REGBIT_GST_INT) {
         //     retval |= APDS_REGBIT_GST_INT;
-        //     gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_GST_ISR_CLR,
+        //     i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_GST_ISR_CLR,
         //     1, &clear);
         // }
     }
@@ -463,14 +461,14 @@ status_t apds_detect_swipe_dir(APDS_DEV dev)
 static bool is_als_valid(APDS_DEV dev)
 {
     uint8_t val = 0;
-    gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_STATUS, 1, &val);
+    i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_STATUS, 1, &val);
     return ((val & APDS_REGBIT_ALS_VALID) ? true : false);
 }
 
 static bool is_prx_valid(APDS_DEV dev)
 {
     uint8_t val = 0;
-    gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_STATUS, 1, &val);
+    i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_STATUS, 1, &val);
     return ((val & APDS_REGBIT_PRX_VALID) ? true : false);
 }
 
@@ -479,10 +477,10 @@ static status_t apds_initialise_device(APDS_DEV dev)
     uint8_t pwr_on = 1;
     uint8_t id = 0;
 
-    status_t err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &pwr_on);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &pwr_on);
 
     if (!err) {
-        err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_ID, 1, &id);
+        err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_ID, 1, &id);
         if (!err) {
             log_info(APDS_TAG, "Got ID: 0x%02x", id);
         }
@@ -529,7 +527,7 @@ static status_t testmode(APDS_DEV dev)
 static uint8_t get_gst_fifo_pkts(APDS_DEV dev)
 {
     uint8_t val = 0;
-    gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_LVL, 1, &val);
+    i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_LVL, 1, &val);
     return val;
 }
 
@@ -608,11 +606,6 @@ APDS_DEV apds_init(APDS_DEV dev, apds_init_t *init)
 #endif
 {
     status_t err = STATUS_OK;
-
-    if (!gcd_i2c_check_bus(init->i2c_bus)) {
-        err = STATUS_ERR_INVALID_ARG;
-        log_error(APDS_TAG, "Error - invalid i2c bus");
-    }
 
 #ifdef CONFIG_DRIVERS_USE_HEAP
     APDS_DEV dev;
@@ -764,14 +757,14 @@ status_t apds_set_gesture_status(APDS_DEV dev, uint8_t *on)
         log_info(APDS_TAG, "Gesture engine alreay disabled");
         return STATUS_OK;
     } else {
-        err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
+        err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
         if (state) {
             regval |= APDS_REGBIT_GST_EN;
         } else {
             regval &= ~APDS_REGBIT_GST_EN;
         }
         if (!err) {
-            gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
+            i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
             if (!err) {
                 dev->gst_settings.gst_en = (state ? 1 : 0);
             }
@@ -796,14 +789,14 @@ status_t apds_set_wait_enable(APDS_DEV dev, uint8_t *val)
         log_info(APDS_TAG, "Gesture engine alreay disabled");
         return STATUS_OK;
     } else {
-        err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
+        err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
         if (state) {
             regval |= APDS_REGBIT_WAIT_EN;
         } else {
             regval &= ~APDS_REGBIT_WAIT_EN;
         }
         if (!err) {
-            gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
+            i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_ENABLE, 1, &regval);
             if (!err) {
                 dev->gen_settings.wait_en = (state ? 1 : 0);
             }
@@ -828,7 +821,7 @@ status_t apds_get_wait_time(APDS_DEV dev, uint8_t *wait)
 status_t apds_set_wait_time(APDS_DEV dev, uint8_t *wait)
 {
     uint8_t byte = *wait;
-    status_t err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_WAITTIME, 1, &byte);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_WAITTIME, 1, &byte);
     if (!err) {
         dev->gen_settings.wait_time = byte;
     }
@@ -892,7 +885,7 @@ status_t apds_get_adc_time(APDS_DEV dev, uint8_t *adct)
 status_t apds_set_adc_time(APDS_DEV dev, uint8_t *adct)
 {
     uint8_t byte = *adct;
-    status_t err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_ADCTIME, 1, &byte);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_ADCTIME, 1, &byte);
     if (!err) {
         dev->als_settings.adc_intg_time = byte;
     }
@@ -912,12 +905,7 @@ status_t apds_set_alsintr_low_thr(APDS_DEV dev, uint16_t *thr)
         (uint8_t)val,
         ((uint8_t)val >> 8),
     };
-    status_t err = gcd_i2c_write_address(
-        dev->bus,
-        dev->addr,
-        APDS_REGADDR_ALS_THR_LOW_LSB,
-        2,
-        bytes);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_ALS_THR_LOW_LSB, 2, bytes);
     if (!err) {
         dev->als_settings.als_thresh_l = val;
     }
@@ -934,12 +922,7 @@ status_t apds_set_alsintr_hi_thr(APDS_DEV dev, uint16_t *thr)
 {
     uint16_t val = *thr;
 
-    status_t err = gcd_i2c_write_address(
-        dev->bus,
-        dev->addr,
-        APDS_REGADDR_ALS_THR_HIGH_LSB,
-        2,
-        &val);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_ALS_THR_HIGH_LSB, 2, &val);
     if (!err) {
         dev->als_settings.als_thresh_h = val;
     }
@@ -1005,7 +988,7 @@ status_t apds_get_prxintr_low_thr(APDS_DEV dev, uint8_t *thr)
 status_t apds_set_prxintr_low_thr(APDS_DEV dev, uint8_t *thr)
 {
     uint8_t val = *thr;
-    status_t err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_PRX_THR_LOW, 1, &val);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_PRX_THR_LOW, 1, &val);
     if (!err) {
         dev->prx_settings.prox_thresh_l = val;
     }
@@ -1021,7 +1004,7 @@ status_t apds_get_prxintr_high_thr(APDS_DEV dev, uint8_t *thr)
 status_t apds_set_prxintr_high_thr(APDS_DEV dev, uint8_t *thr)
 {
     uint8_t val = *thr;
-    status_t err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_PRX_THR_HIGH, 1, &val);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_PRX_THR_HIGH, 1, &val);
     if (!err) {
         dev->prx_settings.prox_thresh_h = val;
     }
@@ -1092,7 +1075,7 @@ status_t apds_set_prx_pulses(APDS_DEV dev, uint8_t *cnt)
         log_error(APDS_TAG, "Invalid value");
     } else {
         uint8_t regval = val | (dev->prx_settings.ledtime << 6);
-        err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_PRX_PULSE_LEN, 1, &regval);
+        err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_PRX_PULSE_LEN, 1, &regval);
     }
     if (!err) {
         dev->prx_settings.led_pulse_n = val;
@@ -1139,7 +1122,7 @@ status_t apds_get_gst_proximity_ent_thr(APDS_DEV dev, uint8_t *d)
 status_t apds_set_gst_proximity_ent_thr(APDS_DEV dev, uint8_t *d)
 {
     uint8_t val = *d;
-    status_t err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_GST_ENTR_THR, 1, &val);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_GST_ENTR_THR, 1, &val);
     if (!err) {
         dev->gst_settings.gst_thresh_entr = val;
     }
@@ -1156,7 +1139,7 @@ status_t apds_get_gst_proximity_ext_thr(APDS_DEV dev, uint8_t *d)
 status_t apds_set_gst_proximity_ext_thr(APDS_DEV dev, uint8_t *d)
 {
     uint8_t val = *d;
-    status_t err = gcd_i2c_write_address(dev->bus, dev->addr, APDS_REGADDR_GST_EXT_THR, 1, &val);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_GST_EXT_THR, 1, &val);
     if (!err) {
         dev->gst_settings.gst_thresh_exit = val;
     }
@@ -1170,12 +1153,7 @@ status_t apds_set_gst_direction_mode(APDS_DEV dev, uint8_t *mode)
     if (regval > APDS_DIR_LEFTRIGHT_ONLY) {
         return STATUS_ERR_INVALID_ARG;
     }
-    status_t err = gcd_i2c_write_address(
-        dev->bus,
-        dev->addr,
-        APDS_REGADDR_GST_CONFIG_3,
-        1,
-        &regval);
+    status_t err = i2c_register_write(dev->bus, dev->addr, APDS_REGADDR_GST_CONFIG_3, 1, &regval);
     if (!err) {
         dev->gst_settings.gst_dir_select = regval;
     }
@@ -1437,7 +1415,7 @@ status_t apds_get_gst_fifo_lvl(APDS_DEV dev, uint8_t *level)
 {
     status_t status = STATUS_OK;
     uint8_t regval = 0;
-    status = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_LVL, 1, &regval);
+    status = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_LVL, 1, &regval);
     *level = regval;
     return status;
 }
@@ -1452,7 +1430,7 @@ status_t apds_read_fifo_data_set(APDS_DEV dev, uint8_t *index)
         return STATUS_ERR_INVALID_ARG;
     }
 
-    err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_U, 4, data);
+    err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_U, 4, data);
     if (!err) {
         dev->data.gst_fifo_u_data[pkt_index] = data[0];
         dev->data.gst_fifo_d_data[pkt_index] = data[1];
@@ -1481,7 +1459,7 @@ status_t apds_read_fifo_full(APDS_DEV dev)
     if (!err) {
         num_bytes = num_rows * 4;
         log_info("Reading %u bytes / %u available pkts from the fifo!\n", num_bytes, num_rows);
-        err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_U, num_bytes, data);
+        err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_GST_FIFO_U, num_bytes, data);
     }
 
     if (!err) {
@@ -1513,7 +1491,7 @@ status_t apds_get_fifo_valid(APDS_DEV dev, bool *valid)
 {
     status_t err = STATUS_OK;
     uint8_t regval = 0;
-    err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_GST_STATUS, 1, &regval);
+    err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_GST_STATUS, 1, &regval);
 
     if (!err) {
         if (regval & APDS_REGBIT_GST_DATA_VALID) {
@@ -1529,7 +1507,7 @@ status_t apds_get_fifo_overflow(APDS_DEV dev, bool *ov)
 {
     status_t err = STATUS_OK;
     uint8_t regval = 0;
-    err = gcd_i2c_read_address(dev->bus, dev->addr, APDS_REGADDR_GST_STATUS, 1, &regval);
+    err = i2c_register_read(dev->bus, dev->addr, APDS_REGADDR_GST_STATUS, 1, &regval);
 
     if (!err) {
         if (regval & APDS_REGBIT_GST_FIFO_OVR) {

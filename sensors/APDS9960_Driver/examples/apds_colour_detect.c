@@ -1,47 +1,45 @@
 /******************************************************/ /**
- *  @file main.c
- *  
- *  @brief main application file for ESPHome
- * 
- *********************************************************/
+                                                          *  @file main.c
+                                                          *
+                                                          *  @brief main application file for
+                                                          *ESPHome
+                                                          *
+                                                          *********************************************************/
+
+#include "APDS9960_Driver.h"
+#include "GenericCommsDriver.h"
+#include "LSM_Driver.h"
+#include "PeripheralManager.h"
+#include "Utilities.h"
+#include "WifiDriver.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "main.h"
+#include "nvs_flash.h"
+#include "port/interfaces/spi.h"
+#include "port/interfaces/uart.h"
+#include "port/log.h"
+#include "port/system.h"
+#include "sdkconfig.h"
 
 #include <stdio.h>
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "port/system.h"
-#include "port/interfaces/spi.h"
-#include "nvs_flash.h"
-#include "sdkconfig.h"
-
-#include "GenericCommsDriver.h"
-
-#include "main.h"
-#include "port/log.h"
-#include "WifiDriver.h"
-#include "PeripheralManager.h"
-#include "Utilities.h"
-#include "LSM_Driver.h"
-#include "APDS9960_Driver.h"
-#include "port/interfaces/uart.h"
 #include <time.h>
 
 /************************************************
- * Private Functions 
+ * Private Functions
  ************************************************/
 
 void app_main(void)
 {
-
-        //Initialize NVS
+    // Initialize NVS
     status_t ret = nvs_flash_init();
     if (ret == STATUS_ERR_NVS_NO_FREE_PAGES || ret == STATUS_ERR_NVS_NEW_VERSION_FOUND) {
-      STATUS_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
+        STATUS_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
     }
 
     STATUS_ERROR_CHECK(ret);
-
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
     log_info("MAIN", "Config use periph manager is enabled");
@@ -68,11 +66,10 @@ void app_main(void)
 
     ret = peripheral_manager_init(&pm_init);
 
-    if(ret != STATUS_OK) {
+    if (ret != STATUS_OK) {
         log_error("MAIN", "Error starting PM");
     }
 #endif
-
 
     apds_init_t apds_init_data = {
         .i2c_bus = 1,
@@ -83,11 +80,10 @@ void app_main(void)
 
     /** set the prx en & als en **/
 
-    uint8_t byte = 0; 
+    uint8_t byte = 0;
     uint16_t val = 0;
-    uint8_t  prx = 0;
+    uint8_t prx = 0;
     uint8_t crgbraw[8] = {0};
-
 
     /** set the AGAIN to 64* **/
     byte = APDS_PRX_GAIN_64;
@@ -96,7 +92,7 @@ void app_main(void)
     /** set the wait time to ~100ms **/
     byte = 200;
     apds_set_wait_time(apds, &byte);
-    
+
     /** set the als persistence to some reasonable value **/
     byte = 5;
     apds_set_als_intr_persistence(apds, &byte);
@@ -119,18 +115,17 @@ void app_main(void)
     byte = 1;
     apds_set_als_status(apds, &apds);
 
-
     // if(ret == STATUS_OK) {
 
     //     wifi_init_sta();
 
     // }
 
-    while (1)
-    {
-
-        //STATUS_ERROR_CHECK(gcd_i2c_read_address(apds->bus, apds->addr, APDS_REGADDR_PROX_DATA, 1, &prx));
-        STATUS_ERROR_CHECK(gcd_i2c_read_address(apds->bus, apds->addr, APDS_REGADDR_CLRCHAN_DATA_LSB, 8, crgbraw));
+    while (1) {
+        // STATUS_ERROR_CHECK(i2c_register_read(apds->bus, apds->addr, APDS_REGADDR_PROX_DATA, 1,
+        // &prx));
+        STATUS_ERROR_CHECK(
+            i2c_register_read(apds->bus, apds->addr, APDS_REGADDR_CLRCHAN_DATA_LSB, 8, crgbraw));
         uint16_t c = (crgbraw[0] | crgbraw[1] << 8);
         uint16_t r = (crgbraw[2] | crgbraw[3] << 8);
         uint16_t g = (crgbraw[4] | crgbraw[5] << 8);
@@ -138,7 +133,6 @@ void app_main(void)
 
         log_info("MAIN", "Results: PRX: %u  C: %u R: %u G: %u B: %u ", prx, c, r, g, b);
         vTaskDelay(pdMS_TO_TICKS(100));
-
     }
     /* here be dragons */
 }
