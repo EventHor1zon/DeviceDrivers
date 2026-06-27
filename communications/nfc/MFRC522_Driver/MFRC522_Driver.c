@@ -40,7 +40,7 @@
 #include "port/interfaces/include/port_spi.h"
 #include "port/port_log.h"
 #include "port/port_types.h"
-#include "utils/utilities.h"
+#include "utilities.h"
 
 #include <string.h>
 
