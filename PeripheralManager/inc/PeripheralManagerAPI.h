@@ -1,5 +1,5 @@
 /****************************************
- * \file     CommandAPI.h
+ * \file     PeripheralManagerAPI.h
  * \brief    Contains command api struct definitions
  * \date     Sept 2020
  * \author   RJAM

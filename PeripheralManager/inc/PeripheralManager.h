@@ -17,7 +17,7 @@
 #define PERIPHERAL_MANAGER_H
 
 /********* Includes ********************/
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 #include "error_types.h"
 #include "port/driver/include/port_gpio.h"
 #include "port/interfaces/include/port_i2c.h"
