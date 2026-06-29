@@ -592,7 +592,7 @@ static void pm_command_task(void *args)
 
         outgoing.rsp_args = incomming.rsp_args;
 
-        xQueueSendToBack(incomming.source_queue, &outgoing, PM_QUEUE_SEND_TIMEOUT);
+        xQueueSendToBack(incomming.response_queue, &outgoing, PM_QUEUE_SEND_TIMEOUT);
     }
     /** Here be dragons **/
 }

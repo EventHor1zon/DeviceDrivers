@@ -250,7 +250,9 @@ typedef struct param_info {
 
 /** \struct data_rsp_t
  *  \brief  data response, response to a get request
- *
+ *          this struct contains the source peripheral
+ *          and parameter IDs followed by a data union
+ *          the signed/unsigned/float are utility
  */
 typedef struct data_rsp {
     uint8_t param_id;
@@ -333,16 +335,10 @@ typedef struct stream_cmd {
 
 /** command request **/
 typedef struct command_request {
-    uint16_t cmd_uid;
-    req_pkt_t cmd_type;
-    union CommandAPI {
-        /* data */
-        periph_cmd_t cmd_data; /** < the command data **/
-#ifdef CONFIG_USE_STREAM
-        stream_cmd_t strm_data;
-#endif
-    } data;
-    QueueHandle_t source_queue;
+    uint16_t cmd_uid;           /** Reserved for later use */
+    req_pkt_t cmd_type;         /** command type (one of ) */
+    periph_cmd_t cmd_data;      /**  the command data **/
+    queuetype_t response_queue; /** queue */
     void *rsp_args;
 } cmd_request_t;
 
