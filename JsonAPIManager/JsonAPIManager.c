@@ -1168,69 +1168,52 @@ static void api_response_task(void *args)
                     }
             }
         }
-
         /**
          * Prepare the response & header buffers
          **/
         if (!err) {
             resp_arg = command_response.rsp_args;
-            hd = resp_arg->hd;
-            fd = resp_arg->fd;
 
 #ifdef DEBUG_MODE
-            log_info(API_TAG, "Sending response");
+            ESP_LOGI(API_TAG, "Sending response");
 #endif /* DEBUG */
 
-            /** copy the headers into the header buffer **/
-            if (snlog_info(header_buff, API_MAX_HDR_RESPONSE_LEN, http_ok_hdr_str, strlen(response))
-                > API_MAX_HDR_RESPONSE_LEN)
-            {
-                log_error(API_TAG, "Error http header too long");
-                err = STATUS_ERR_INVALID_ARG;
+            req = resp_arg->req;
+
+            if (!req) {
+                ESP_LOGE(API_TAG, "Error getting session");
+                err = ESP_ERR_INVALID_ARG;
+            } else {
+                ESP_LOGI(API_TAG, "Got session!");
             }
-#ifdef DEBUG_MODE
-            // log_info(API_TAG, "Sending headers");
-            // log_info(API_TAG, "headers: %s", header_buff);
-#endif  // DEBUG_MODE
         }
-        /*********** Return Response ************/
-        /** At this point we should have a response ready in all situations
-         *  set the http response type to json
-         *  and send the response with the json data
-         **/
-        if (!err) {
-            /** send the http headers **/
 
-            if (httpd_socket_send(hd, fd, (const char *)header_buff, strlen(header_buff), 0) < 0) {
-                log_error(API_TAG, "Failed to send HTTP response header");
+        if (err != ESP_ERR_INVALID_ARG && ESP_ERR_TIMEOUT) {
+            /** we are able to send a response */
+            if (err == ESP_ERR_INVALID_RESPONSE) {
+                /** failed to assemble response, send 500 error */
+                httpd_resp_send_500(req);
+            } else {
+                /** we have a sensible response to send! */
+                httpd_resp_set_type(req, TYPE_STR);
+#ifdef CONFIG_JSON_USERAGENT_HDR
+                httpd_resp_set_hdr(req, USRAGENT_HDR, CONFIG_JSON_USERAGENT_HDR);
+#endif /* CONFIG_JSON_USERAGENT_HDR */
+                err = httpd_resp_send(req, response, strlen(response));
             }
-            /** send crlf sep **/
-            if (httpd_socket_send(hd, fd, cr_lf_seperator, strlen(cr_lf_seperator), 0) < 0) {
-                log_error(API_TAG, "Failed to send cr lf data");
+            if (err) {
+                ESP_LOGE(API_TAG, "Error sending response! [%u]", err);
             }
+        }
+        /** clear the message buffers **/
+        memset(response, 0, sizeof(uint8_t) * API_MAX_RESPONSE_LEN);
+        memset(header_buff, 0, sizeof(uint8_t) * API_MAX_HDR_RESPONSE_LEN);
 
-#ifdef DEBUG_MODE
-            log_info("Content length %u\n", strlen(response));
-            log_info(API_TAG, "Content: %s", response);
-            log_info(API_TAG, "Sending Content");
-#endif  // DEBUG_MODE
-            /** send the response data **/
-            if (httpd_socket_send(hd, fd, (const char *)response, strlen(response), 0) < 0) {
-                log_error(API_TAG, "Failed to send HTTP response data");
-            }
-
-            /** Close the connection **/
-            httpd_sess_trigger_close(hd, fd);
-
-            /** clear the message buffers **/
-            memset(response, 0, sizeof(uint8_t) * API_MAX_RESPONSE_LEN);
-            memset(header_buff, 0, sizeof(uint8_t) * API_MAX_HDR_RESPONSE_LEN);
-
-            /** free the async resources **/
-            if (resp_arg) {
-                log_info(API_TAG, "Freeing args");
-                heap_caps_free(resp_arg);
-            }
+        /** free the async resources **/
+        if (resp_arg) {
+            ESP_LOGI(API_TAG, "Freeing args");
+            httpd_req_async_handler_complete(resp_arg->req);
+            heap_caps_free(resp_arg);
         }
     }
     /** Here be Dragons **/
@@ -1601,20 +1584,22 @@ status_t cmd_post_handler(httpd_req_t *req)
     }
 
     if (!err) {
+        httpd_req_t *req_copy = NULL;
+        httpd_req_async_handler_begin(req, &req_copy);
         /** copy the http information to the command request **/
         async_resp_arg_t *resp_arg = heap_caps_calloc(1, sizeof(async_resp_arg_t), MALLOC_CAP_8BIT);
-        resp_arg->hd = req->handle;
-        resp_arg->fd = httpd_req_to_sockfd(req);
+        resp_arg->req = req_copy;
         command_request.rsp_args = resp_arg;
-        command_request.source_queue = respondq;
+
 #ifdef DEBUG_MODE
-        log_info("Address of request Pre-Queue API side: [%p]\n", req);
+        printf("Address of request Pre-Queue API side: [%p]\n", req);
         showmem((uint8_t *)req, 16);
 #endif
         /************  Submit Request  *********/
         if (xQueueSend(command_queue, &command_request, API_MANAGER_QUEUE_PUT_TIMEOUT) != pdTRUE) {
-            log_info(API_TAG, "Error in writing to queue");
+            ESP_LOGI(API_TAG, "Error in writing to queue");
             err = API_ERR_CMD_TIMEOUT;
+            httpd_req_async_handler_complete(req_copy);
         }
     }
 
