@@ -7,9 +7,9 @@
  ****************************************/
 
 /********* Includes *******************/
-#include "CommandAPI.h"
 #include "GenericCommsDriver.h"
 #include "PeripheralManager.h"
+#include "PeripheralManagerAPI.h"
 #include "freertos/FreeRTOS.h"
 #include "port/error_types.h"
 #include "port/event.h"
@@ -168,6 +168,28 @@ static uint8_t peripheral_num = 0;
 static peripheral_t peripherals[PM_MAX_PERIPHERALS];
 
 /****** Private Functions *************/
+
+static uint8_t get_param_data_size(datatype_t t)
+{
+    uint8_t sz = 0;
+
+    switch (t) {
+        case DATATYPE_NONE: sz = 0; break;
+        case DATATYPE_BOOL:
+        case DATATYPE_STRING: sz = sizeof(bool); break;
+        case DATATYPE_INT8:
+        case DATATYPE_UINT8: sz = sizeof(uint8_t); break;
+        case DATATYPE_INT16:
+        case DATATYPE_UINT16: sz = sizeof(uint16_t); break;
+        case DATATYPE_INT32:
+        case DATATYPE_UINT32: sz = sizeof(uint32_t); break;
+        case DATATYPE_FLOAT: sz = sizeof(float); break;
+        case DATATYPE_DOUBLE: sz = sizeof(double); break;
+        default: sz = 0; break;
+    }
+
+    return sz;
+}
 
 static bool set_within_limits(periph_cmd_t *cmd, parameter_t *param)
 {

@@ -21,7 +21,7 @@
  ****************************************/
 
 /********* Includes *******************/
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 #include "Utilities.h"
 #include "inc/LedEffects.h"
 #include "inc/LedStrip_Driver.h"

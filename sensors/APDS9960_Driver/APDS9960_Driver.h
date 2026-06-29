@@ -18,7 +18,7 @@
 #include "sdkconfig.h"
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 #define apds_param_len 20
 const parameter_t apds_parameter_map[apds_param_len];
 const peripheral_t apds_periph_template;

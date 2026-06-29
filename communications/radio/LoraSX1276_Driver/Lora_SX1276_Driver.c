@@ -45,9 +45,9 @@
 #include "Utilities.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "port/driver/include/port_gpio.h"
+#include "port/driver/port_gpio.h"
 #include "port/error_types.h"
-#include "port/interfaces/include/port_spi.h"
+#include "port/interfaces/port_spi.h"
 #include "port/port_log.h"
 #include "port/port_malloc.h"
 #include "port/port_types.h"
@@ -56,7 +56,7 @@
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 
 const parameter_t lora_parameter_map[LORA_PERIPH_LEN] = {
 

@@ -19,7 +19,7 @@
 
 
 
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 #define screen_param_len 6
 
 extern const parameter_t ssd1306_param_map[screen_param_len];

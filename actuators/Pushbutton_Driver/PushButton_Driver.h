@@ -26,7 +26,7 @@
 #define BTN_DEFAULT_DEBOUNCE_T 150
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 #endif  /** CONFIG_USE_PERIPH_MANAGER **/
 
 

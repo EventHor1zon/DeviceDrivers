@@ -25,7 +25,7 @@
  *  between LoRa / fsk/ook mode  
  **/
 
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 #define LORA_PERIPH_LEN 26
 
 extern const parameter_t lora_parameter_map[LORA_PERIPH_LEN];

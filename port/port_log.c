@@ -75,14 +75,29 @@ void __printf(const char *const msg, ...)
     va_end(args);
 }
 
-void log_fatal(const char *const msg, ...);
+void __attribute__((weak)) log_fatal(const char *const msg, ...)
+{
+    __printf("[FATAL] %s", msg);
+}
 
-void log_error(const char *const msg, ...);
+void __attribute__((weak)) log_error(const char *const msg, ...)
+{
+    __printf("[ERROR] %s", msg);
+}
 
-void log_warning(const char *const msg, ...);
+void __attribute__((weak)) log_warning(const char *const msg, ...)
+{
+    __printf("[WARN] %s", msg);
+}
 
-void log_info(const char *const msg, ...);
+void __attribute__((weak)) log_info(const char *const msg, ...)
+{
+    __printf("[INFO] %s", msg);
+}
 
-void log_verbose(const char *const msg, ...);
+void __attribute__((weak)) log_verbose(const char *const msg, ...)
+{
+    __printf("[VERB.] %s", msg);
+}
 
 /** END **/

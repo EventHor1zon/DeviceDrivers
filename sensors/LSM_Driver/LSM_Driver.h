@@ -31,7 +31,7 @@
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 
 #define lsm_param_map_len 38
 

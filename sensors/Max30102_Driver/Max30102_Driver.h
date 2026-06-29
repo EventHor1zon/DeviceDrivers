@@ -76,7 +76,7 @@
 #endif
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
-#include "CommandAPI.h"
+#include "PeripheralManagerAPI.h"
 
 #define max31_param_length 13
 const parameter_t max31_param_map[max31_param_length];
