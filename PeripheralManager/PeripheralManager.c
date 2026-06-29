@@ -818,11 +818,12 @@ event_loop_handle_t pm_get_event_loop()
 peripheral_t *get_peripheral_from_id(uint32_t periph_id)
 {
     peripheral_t *periph = NULL;
-    log_info(PM_TAG, "Looking up peripheral with id: %lu)", periph_id);
+    log_verbose(PM_TAG, "Looking up peripheral with id: %lu)", periph_id);
     for (int i = 0; i < peripheral_num; i++) {
-        log_info(PM_TAG, "Periph id: %lu", peripherals[i].peripheral_id);
+        log_verbose(PM_TAG, "Periph id: %lu", peripherals[i].peripheral_id);
 
         if (peripherals[i].handle == NULL) {
+            /** TODO: Assumes we never remove a peripheral. Redo this */
             break;
         }
         if (peripherals[i].peripheral_id == periph_id) {
@@ -865,7 +866,10 @@ status_t pm_add_new_peripheral(peripheral_t *template, uint8_t id, void *handle)
         return STATUS_ERR_INVALID_ARG;
     }
 
-    /** select the next free peripheral slot **/
+    /** select the next free peripheral slot
+     * TODO: This assumes we never unregister
+     *       redo
+     ***/
     object = &peripherals[peripheral_num];
 
     /** copy the template **/
