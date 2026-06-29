@@ -60,8 +60,8 @@
 #if CONFIG_ENABLE_STREAM
 #include "StreamComponent.h"
 #endif /* CONFIG_ENABLE_STREAM */
-#include "CommandAPI.h"
 #include "PeripheralManager.h"
+#include "PeripheralManagerAPI.h"
 #include "Utilities.h"
 
 #define DEBUG_MODE 1
