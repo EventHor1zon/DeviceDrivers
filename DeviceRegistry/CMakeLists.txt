@@ -1,11 +1,11 @@
 set(srcs
     "DeviceRegistry.c"   
-    "CommandAPI.c"
 )
 
 set(includes "inc/")
 
-idf_component_register(SRCS "${srcs}"
-                    INCLUDE_DIRS ${includes}
-REQUIRES "esp_event" "driver" "GenericCommsDriver" "CBuffer" 
-)
+# Uncomment to make this an ESP component!
+# idf_component_register(SRCS "${srcs}"
+#                     INCLUDE_DIRS ${includes}
+# REQUIRES "esp_event" "driver" 
+# )

@@ -8,54 +8,18 @@
 
 /********* Includes *******************/
 #include "./inc/DeviceRegistry.h"
-#include "GenericCommsDriver.h"
+#include "DEVICE.h"
 #include "freertos/FreeRTOS.h"
 #include "port/error_types.h"
 #include "port/event.h"
 #include "port/port_log.h"
 
 #include <string.h>
-#if CONFIG_ENABLE_STREAM
-#include "StreamComponent.h"
-#endif
-#include "CircularBuffer.h"
 
 /******** Global Data **********/
 
-const char *DR_TAG = "PERIPHERAL_MANAGER";
-/** TODO: Define this somewhere better **/
-const char *DEVNAME = "Led-Bunny";
-const uint8_t DEVICE_ID = 0x90;
-
+const char *DR_TAG = "DEVICE_REGISTRY";
 static bool is_init = false;
-
-QueueHandle_t command_queue; /** < Handle for the main command queue **/
-
-#ifdef CONFIG_USE_EVENTS
-
-STATUS_EVENT_DEFINE_BASE(DR_EVENT_BASE);
-
-event_map_t *event_map = NULL;
-event_loop_handle_t dev_reg_event_loop = NULL;
-event_handler_instance_t dev_reg_event_instance = NULL;
-
-void dev_reg_event_handler(void *args, event_base_t base, int32_t id, void *event_args);
-
-static status_t event_loop_init(void);
-static event_map_t *find_event_map(uint32_t id);
-static cmd_rsp_t dev_reg_handle_periph_cmd(cmd_request_t *request);
-
-#endif
-
-/****** Function Prototypes ***********/
-
-/** \name           dev_reg_is_streamable
- *  \brief          Checks a given parameter is streamable
- *  \param cmd      - pointer to the peripheral command
- *  \param param    - pointer to the parameter struct
- *  \return Boolean
- */
-static bool dev_reg_is_streamable(uint8_t periph_id, uint8_t param_id);
 
 /** \name            set_within_limits
  *  \brief           Checks a given set data value is lte
@@ -74,31 +38,31 @@ static bool set_within_limits(periph_cmd_t *cmd, parameter_t *param);
  *  \param  rsp        - the command response to populate
  *  \return STATUS_OK or DR_ERROR_
  */
-static void dev_reg_create_error_response(uint32_t error_code, char *err_msg, cmd_rsp_t *rsp);
+static void create_error_response(uint32_t error_code, char *err_msg, cmd_rsp_t *rsp);
 
-/** \name               dev_reg_handle_param_info_request
+/** \name               handle_param_info_request
  *  \brief              Handles a 'parameter info' request.
  *  \param request      pointer to the command request
  *  \param response     pointer to the command response
  *  \return status_ok or DR_ERROR type
  */
-static void dev_reg_handle_param_info_request(uint8_t periph_id, uint8_t param_id, cmd_rsp_t *rsp);
+static void handle_param_info_request(uint8_t periph_id, uint8_t param_id, cmd_rsp_t *rsp);
 
-/** \name               dev_reg_handle_periph_info_request
+/** \name               handle_periph_info_request
  *  \brief              Handles a peripheral info request
  *  \param request      - pointer to the command request
  *  \param response     - pointer to the command response
  *  \return status_ok or DR_ERROR type
  */
-static void dev_reg_handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp);
+static void handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp);
 
-/** \name               dev_reg_handle_device_info_request
+/** \name               handle_device_info_request
  *  \brief              Handles a 'device info' request.
  *  \param request      - pointer to the command request
  *  \param response     - pointer to the command response
  *  \return status_ok or DR_ERROR type
  */
-static void dev_reg_handle_device_info_request(cmd_rsp_t *rsp);
+static void handle_device_info_request(cmd_rsp_t *rsp);
 
 /** \name               handle_get_request
  *  \brief              Handles a 'get' request. Calls the requested function to
@@ -131,7 +95,7 @@ static status_t handle_set_request(cmd_request_t *request, cmd_rsp_t *response);
  */
 static status_t handle_invoke_request(cmd_request_t *request, cmd_rsp_t *response);
 
-/** \name               dev_reg_handle_periph_cmd
+/** \name               handle_periph_cmd
  *  \brief              Handles a Peripheral command request.
  *                      Sends to the appropriate handler based on the
  *                      command type. Returns the command response -
@@ -140,7 +104,7 @@ static status_t handle_invoke_request(cmd_request_t *request, cmd_rsp_t *respons
  *  \param request      - pointer to the command request
  *  \return populated command response
  */
-static cmd_rsp_t dev_reg_handle_periph_cmd(cmd_request_t *request);
+static cmd_rsp_t handle_periph_cmd(cmd_request_t *request);
 
 /** \name dev_reg_command_task
  *  \brief  PM management task
@@ -149,14 +113,6 @@ static cmd_rsp_t dev_reg_handle_periph_cmd(cmd_request_t *request);
  *          and returns the response via the response queue
  */
 static void dev_reg_command_task(void *args);
-
-#ifdef CONFIG_ENABLE_STREAM
-
-static cmd_rsp_t dev_reg_process_stream(cmd_request_t *request);
-
-static bool dev_reg_is_streamable(uint8_t periph_id, uint8_t param_id);
-
-#endif
 
 /************ ISR *********************/
 
@@ -205,7 +161,7 @@ static bool set_within_limits(periph_cmd_t *cmd, parameter_t *param)
     {
         return cmd->data.uint_data > param->max_valid;
     } else if (cmd->data_t == DATATYPE_STRING) {
-        return true;
+        return strlen(cmd->data.str_data) > param->max_valid;
     }
 
     return false;
@@ -245,7 +201,7 @@ static status_t check_valid_param_id(cmd_request_t *request)
 
 /************** Handler Functions *******************/
 
-static void dev_reg_create_error_response(uint32_t error_code, char *err_msg, cmd_rsp_t *rsp)
+static void create_error_response(uint32_t error_code, char *err_msg, cmd_rsp_t *rsp)
 {
     size_t len;
     len = strlen(err_msg);
@@ -257,7 +213,7 @@ static void dev_reg_create_error_response(uint32_t error_code, char *err_msg, cm
     return;
 }
 
-static void dev_reg_handle_param_info_request(uint8_t periph_id, uint8_t param_id, cmd_rsp_t *rsp)
+static void handle_param_info_request(uint8_t periph_id, uint8_t param_id, cmd_rsp_t *rsp)
 {
     peripheral_t *periph;
     parameter_t *param;
@@ -268,14 +224,14 @@ static void dev_reg_handle_param_info_request(uint8_t periph_id, uint8_t param_i
      *  periph_id - if periph is null set error response & return.
      **/
     if (periph == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid peripheral id", rsp);
+        create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid peripheral id", rsp);
         return;
     }
 
     param = get_parameter_from_id(periph, param_id);
 
     if (param == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid parameter id", rsp);
+        create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid parameter id", rsp);
         return;
     }
 
@@ -294,7 +250,7 @@ static void dev_reg_handle_param_info_request(uint8_t periph_id, uint8_t param_i
     return;
 }
 
-static void dev_reg_handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp)
+static void handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp)
 {
     peripheral_t *periph;
     uint32_t len;
@@ -304,7 +260,7 @@ static void dev_reg_handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp
      *  periph_id - if periph is null set error response & return.
      **/
     if (periph == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid peripheral id", rsp);
+        create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid peripheral id", rsp);
         return;
     }
 
@@ -324,7 +280,7 @@ static void dev_reg_handle_periph_info_request(uint8_t periph_id, cmd_rsp_t *rsp
     return;
 }
 
-static void dev_reg_handle_device_info_request(cmd_rsp_t *rsp)
+static void handle_device_info_request(cmd_rsp_t *rsp)
 {
     rsp->rsp_type = RSP_TYPE_DEV_INFO;
     rsp->rsp_data.dev_info.num_periphs = peripheral_num;
@@ -346,19 +302,19 @@ static status_t handle_get_request(cmd_request_t *request, cmd_rsp_t *response)
     periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
     if (periph == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
+        create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
         return DR_ERR_INVALID_PERIPH_ID;
     }
 
     param = get_parameter_from_id(periph, request->cmd_data.param_id);
 
     if (param == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
+        create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
         return DR_ERR_INVALID_PARAM_ID;
     }
 
     if (param->get == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_METHOD, "Param is not Gettable", response);
+        create_error_response(DR_ERR_INVALID_METHOD, "Param is not Gettable", response);
         return DR_ERR_INVALID_ARG;
     }
 
@@ -366,7 +322,7 @@ static status_t handle_get_request(cmd_request_t *request, cmd_rsp_t *response)
     cmd_status = param->get((handle_t *)periph->handle, &response->rsp_data.data_rsp.data);
 
     if (cmd_status != STATUS_OK) {
-        dev_reg_create_error_response((DR_ERR_GET_FAILED_BASE + cmd_status), "Get Error", response);
+        create_error_response((DR_ERR_GET_FAILED_BASE + cmd_status), "Get Error", response);
         cmd_status = DR_ERR_GET_FAILED_BASE;
     } else {
         /** craft the rest of the get response */
@@ -389,25 +345,25 @@ static status_t handle_set_request(cmd_request_t *request, cmd_rsp_t *response)
     periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
     if (periph == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
+        create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
         return DR_ERR_INVALID_PERIPH_ID;
     }
 
     param = get_parameter_from_id(periph, request->cmd_data.param_id);
 
     if (param == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
+        create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
         return DR_ERR_INVALID_PARAM_ID;
     }
 
     if (param->set == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_CMD, "Param not settable", response);
+        create_error_response(DR_ERR_INVALID_CMD, "Param not settable", response);
         return DR_ERR_INVALID_ARG;
     }
 
     if (request->cmd_data.data_t != DATATYPE_STRING
         && !set_within_limits(&request->cmd_data, param)) {
-        dev_reg_create_error_response(DR_ERR_SET_OUT_OF_BOUNDS, "Value greater than max", response);
+        create_error_response(DR_ERR_SET_OUT_OF_BOUNDS, "Value greater than max", response);
     }
 
     cmd_status = param->set((handle_t *)periph->handle, (void *)&cmd->data);
@@ -416,7 +372,7 @@ static status_t handle_set_request(cmd_request_t *request, cmd_rsp_t *response)
         response->rsp_type = RSP_TYPE_ACK;
         response->rsp_data.ack.opt = 1;
     } else {
-        dev_reg_create_error_response(DR_ERR_, "", response);
+        create_error_response(DR_ERR_, "", response);
     }
     return cmd_status;
 }
@@ -430,29 +386,26 @@ static status_t handle_invoke_request(cmd_request_t *request, cmd_rsp_t *respons
     periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
     if (periph == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
+        create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
         return DR_ERR_INVALID_PERIPH_ID;
     }
 
     param = get_parameter_from_id(periph, request->cmd_data.param_id);
 
     if (param == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
+        create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
         return DR_ERR_INVALID_PARAM_ID;
     }
 
     if (param->act == NULL) {
-        dev_reg_create_error_response(DR_ERR_INVALID_CMD, "Param not action", response);
+        create_error_response(DR_ERR_INVALID_CMD, "Param not action", response);
         return DR_ERR_INVALID_METHOD;
     } else {
         cmd_status = param->act((handle_t *)periph->handle);
     }
 
     if (cmd_status != STATUS_OK) {
-        dev_reg_create_error_response(
-            (DR_ERR_ACT_FAILED_BASE + cmd_status),
-            "Action Error",
-            response);
+        create_error_response((DR_ERR_ACT_FAILED_BASE + cmd_status), "Action Error", response);
     } else {
         response->rsp_type = RSP_TYPE_ACK;
         response->rsp_data.ack.opt = 1;
@@ -461,7 +414,7 @@ static status_t handle_invoke_request(cmd_request_t *request, cmd_rsp_t *respons
     return cmd_status;
 }
 
-static cmd_rsp_t dev_reg_handle_periph_cmd(cmd_request_t *request)
+static cmd_rsp_t handle_periph_cmd(cmd_request_t *request)
 {
     status_t err = STATUS_OK;
     status_t status = STATUS_OK;
@@ -473,16 +426,10 @@ static cmd_rsp_t dev_reg_handle_periph_cmd(cmd_request_t *request)
 
     /** check the periph/param ids vs request types **/
     if (check_valid_periph_id(request) != STATUS_OK) {
-        dev_reg_create_error_response(
-            DR_ERR_INVALID_PERIPH_ID,
-            "Invalid Periph Id",
-            &command_response);
+        create_error_response(DR_ERR_INVALID_PERIPH_ID, "Invalid Periph Id", &command_response);
         err = DR_ERR_INVALID_PERIPH_ID;
     } else if (check_valid_param_id(request) != STATUS_OK) {
-        dev_reg_create_error_response(
-            DR_ERR_INVALID_PARAM_ID,
-            "Invalid Param Id",
-            &command_response);
+        create_error_response(DR_ERR_INVALID_PARAM_ID, "Invalid Param Id", &command_response);
         err = DR_ERR_INVALID_PARAM_ID;
     }
 
@@ -492,15 +439,12 @@ static cmd_rsp_t dev_reg_handle_periph_cmd(cmd_request_t *request)
             case CMD_TYPE_INFO:
                 if (cmd.periph_id == 0) {
                     /* device info request */
-                    dev_reg_handle_device_info_request(&command_response);
+                    handle_device_info_request(&command_response);
                 } else if (cmd.param_id == 0) {
                     /* peripheral info request */
-                    dev_reg_handle_periph_info_request(cmd.periph_id, &command_response);
+                    handle_periph_info_request(cmd.periph_id, &command_response);
                 } else {
-                    dev_reg_handle_param_info_request(
-                        cmd.periph_id,
-                        cmd.param_id,
-                        &command_response);
+                    handle_param_info_request(cmd.periph_id, cmd.param_id, &command_response);
                 }
                 break;
 
@@ -511,10 +455,7 @@ static cmd_rsp_t dev_reg_handle_periph_cmd(cmd_request_t *request)
             case CMD_TYPE_ACT: err = handle_invoke_request(request, &command_response); break;
 
             default:
-                dev_reg_create_error_response(
-                    DR_ERR_INVALID_CMD,
-                    "Invalid cmd type",
-                    &command_response);
+                create_error_response(DR_ERR_INVALID_CMD, "Invalid cmd type", &command_response);
                 break;
         }
     }
@@ -541,18 +482,18 @@ static void dev_reg_command_task(void *args)
 
     while (1) {
         /** wait forever for incomming commands **/
-        if (xQueueReceive(command_queue, &incomming, portMAX_DELAY) != pdPASS) {
+        if (port_queue_get(command_queue, &incomming, portMAX_DELAY) != pdPASS) {
             ;
         }
         /** process peripheral command **/
         if (incomming.cmd_type == REQ_PKT_TYPE_PERIPH_CMD) {
-            outgoing = dev_reg_handle_periph_cmd(&incomming);
+            outgoing = handle_periph_cmd(&incomming);
         }
 
         /** process stream - in development **/
         else if (incomming.cmd_type == REQ_PKT_TYPE_STREAM)
         {
-            dev_reg_create_error_response(0, "Invalid command type", &outgoing);
+            create_error_response(0, "Invalid command type", &outgoing);
             outgoing.rsp_uid = incomming.cmd_uid;
         }
 
@@ -627,13 +568,13 @@ static cmd_rsp_t dev_reg_process_stream(cmd_request_t *request)
     for (uint8_t i = 0; i < scmd.param_num; i++) {
         log_info("Checking param id %u", scmd.param_ids[i]);
         if (!dev_reg_is_streamable(scmd.periph_id, scmd.param_ids[i])) {
-            dev_reg_create_error_response(100, "Error: Parameter is not streamable", &response);
+            create_error_response(100, "Error: Parameter is not streamable", &response);
             err = STATUS_ERR_INVALID_RESPONSE;
         }
     }
     /** check rate **/
     if (err == STATUS_OK && scmd.rate >= STREAM_DRATE_END) {
-        dev_reg_create_error_response(100, "Error: Invalid stream rate", &response);
+        create_error_response(100, "Error: Invalid stream rate", &response);
         err = STATUS_ERR_INVALID_RESPONSE;
     }
 
@@ -641,7 +582,7 @@ static cmd_rsp_t dev_reg_process_stream(cmd_request_t *request)
         memcpy(param_ids, scmd.param_ids, (sizeof(uint8_t) * 6));
         err = start_new_stream(scmd.param_num, scmd.rate, scmd.periph_id, param_ids);
         if (err) {
-            dev_reg_create_error_response(100, "Error creating stream", &response);
+            create_error_response(100, "Error creating stream", &response);
             err = STATUS_ERR_INVALID_RESPONSE;
         }
     }
@@ -885,20 +826,6 @@ status_t device_registry_init(dev_reg_init_t *init_data)
             initStatus = STATUS_ERR_NO_MEM;
         }
     }
-
-#ifdef CONFIG_ENABLE_STREAM
-    initStatus = stream_init();
-    if (initStatus != STATUS_OK) {
-        log_error(DR_TAG, "Error starting stream component");
-    }
-#endif
-
-#ifdef CONFIG_USE_EVENTS
-    initStatus = event_loop_init();
-    if (initStatus != STATUS_OK) {
-        log_error(DR_TAG, "Error starting event loop");
-    }
-#endif
 
     if (initStatus == STATUS_OK) {
         is_init = true;

@@ -52,8 +52,7 @@ typedef struct peripheral_summary {
 } peripheral_summary_t;
 
 typedef struct dev_reg_init {
-    queuetype_t request_queue;   // the command input queue, expecting items of 'cmd_request_t'
-    queuetype_t response_queue;  // command response queue, outputting items of 'cmd_rsp_t'
+    queuetype_t request_queue;  // the command input queue, expecting items of 'cmd_request_t'
 } dev_reg_init_t;
 
 /********** Types **********************/
