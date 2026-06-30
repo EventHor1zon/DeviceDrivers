@@ -29,31 +29,32 @@
 
 #define PM_MAX_PERIPHERALS    0x0F
 #define PM_QUEUE_SEND_TIMEOUT 1000
-#define PM_PIFO_NUM_TYPE      0xFF
 
-#define PM_ERR_INVALID_ID        0x80
-#define PM_ERR_INVALID_ARG       0x81
-#define PM_ERR_INVALID_TYPE      0x82
-#define PM_ERR_INVALID_CMD       0x83
-#define PM_ERR_INVALID_PERIPH_ID 0x84
-#define PM_ERR_INVALID_PARAM_ID  0x85
-#define PM_ERR_INVALID_CMD_ARGS  0x86
-#define PM_ERR_INVALID_METHOD    0x87
-#define PM_ERR_SET_OUT_OF_BOUNDS 0x88
+typedef enum {
+    DR_ERR_INVALID_ID = 0x80,
+    DR_ERR_INVALID_ARG = 0x81,
+    DR_ERR_INVALID_TYPE = 0x82,
+    DR_ERR_INVALID_CMD = 0x83,
+    DR_ERR_INVALID_PERIPH_ID = 0x84,
+    DR_ERR_INVALID_PARAM_ID = 0x85,
+    DR_ERR_INVALID_CMD_ARGS = 0x86,
+    DR_ERR_INVALID_METHOD = 0x87,
+    DR_ERR_SET_OUT_OF_BOUNDS = 0x88
+} dev_reg_err_t;
 
-#define PM_ERR_GET_FAILED_BASE 0x90
-#define PM_ERR_SET_FAILED_BASE 0xA0
-#define PM_ERR_ACT_FAILED_BASE 0xB0
+#define DR_ERR_GET_FAILED_BASE 0x90
+#define DR_ERR_SET_FAILED_BASE 0xA0
+#define DR_ERR_ACT_FAILED_BASE 0xB0
 
 typedef struct peripheral_summary {
     peripheral_t *peripherals;
     uint8_t perip_num;
 } peripheral_summary_t;
 
-typedef struct pm_init {
+typedef struct dev_reg_init {
     queuetype_t request_queue;   // the command input queue, expecting items of 'cmd_request_t'
     queuetype_t response_queue;  // command response queue, outputting items of 'cmd_rsp_t'
-} pm_init_t;
+} dev_reg_init_t;
 
 /********** Types **********************/
 
@@ -63,24 +64,24 @@ typedef struct pm_init {
  *
  *  initialises the peripheral manager
  *
- *  \return ESP_OK or error
+ *  \return error code
  **/
-status_t peripheral_manager_init(pm_init_t *init_data);
+status_t device_registry_init(dev_reg_init_t *init_data);
 
-/** pm_add_new_peripheral();
+/** dev_reg_add_new_peripheral();
  *  \brief register a new peripheral with the PM
  *  \param template - a pointer to the Peripheral_t template
  *  \param id - the peripheral ID
  *  \param handle - a pointer to the periph handle
  *  \return ESP_OK or error
  **/
-status_t pm_add_new_peripheral(peripheral_t *template, uint8_t id, void *handle);
+status_t dev_reg_add_new_peripheral(peripheral_t *template, uint8_t id, void *handle);
 
-/** pm_handle_parameter_request
+/** dev_reg_handle_parameter_request
  *  \brief - returns a cmd_rsp+t response to a command request
  *  \param - pointer to a request to process
  **/
-cmd_rsp_t pm_handle_parameter_request(cmd_request_t *request);
+cmd_rsp_t dev_reg_handle_parameter_request(cmd_request_t *request);
 
 /**
  *  \brief: Returns pointer to a peripheral from the peripheral id
@@ -103,10 +104,10 @@ parameter_t *get_parameter_from_id(peripheral_t *periph, uint8_t param_id);
 /** \brief returns the peripheral managers' event loop
  *  \return handle to event loop
  */
-esp_event_loop_handle_t pm_get_event_loop(void);
+esp_event_loop_handle_t dev_reg_get_event_loop(void);
 
 /** DEBUG: remove **/
-int pm_test_print(void *args);
+int dev_reg_test_print(void *args);
 
 /** \brief adds an event to the linked list of events
  *  \param map_init a pointer to an event_map_init_t struct

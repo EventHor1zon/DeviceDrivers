@@ -10,11 +10,6 @@
 
 /********* Includes ********************/
 
-#include "esp_event.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
-
 /********* Definitions *****************/
 /** TRY: not sure if this will work... want to have each parameter_t
  *  to have a generic get/set func pointer, regardless of arg size.
@@ -62,9 +57,9 @@ typedef status_t (*actFunc)(handle_t);
 #define DEVICE_MAX_PERIPHERALS            8
 #define PERIPHERAL_MANAGER_MAX_STR_LEN    32
 #define PERIPHERAL_MANAGER_MAX_PARAMETERS 64
-#define PM_MAX_PERIPH_NAME_LENGTH         16
-#define PM_MAX_PARAM_NAME_LENGTH          32
-#define PM_MAX_DEVICE_NAME_LENGTH         16
+#define DR_MAX_PERIPH_NAME_LENGTH         16
+#define DR_MAX_PARAM_NAME_LENGTH          32
+#define DR_MAX_DEVICE_NAME_LENGTH         16
 
 /********** Types **********************/
 
@@ -350,7 +345,7 @@ typedef struct cmd_rsp {
         device_info_rsp_t dev_info;
         periph_info_rsp_t periph_info;
         param_info_rsp_t param_info;
-        data_rsp_t data;
+        data_rsp_t data_rsp;
         ack_rsp_t ack;
         err_rsp_t error;
     } rsp_data;
