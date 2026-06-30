@@ -214,14 +214,14 @@ static bool set_within_limits(periph_cmd_t *cmd, parameter_t *param)
 
 static status_t check_valid_periph_id(cmd_request_t *request)
 {
-    if (request->data.cmd_data.periph_id == 0 && request->data.cmd_data.cmd_type == CMD_TYPE_INFO) {
+    if (request->cmd_data.periph_id == 0 && request->cmd_data.cmd_type == CMD_TYPE_INFO) {
         /** will not return a peripheral,
          *  but this is expected for info request
          ***/
         return STATUS_OK;
     }
 
-    peripheral_t *periph = get_peripheral_from_id(request->data.cmd_data.periph_id);
+    peripheral_t *periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
     /** return lookup success **/
     return (periph == NULL ? STATUS_ERR_INVALID_ARG : STATUS_OK);
@@ -229,16 +229,16 @@ static status_t check_valid_periph_id(cmd_request_t *request)
 
 static status_t check_valid_param_id(cmd_request_t *request)
 {
-    if (request->data.cmd_data.param_id == 0 && request->data.cmd_data.cmd_type == CMD_TYPE_INFO) {
+    if (request->cmd_data.param_id == 0 && request->cmd_data.cmd_type == CMD_TYPE_INFO) {
         /** will not return a parameter,
          *  but this is expected for info request
          ***/
         return STATUS_OK;
     }
 
-    peripheral_t *periph = get_peripheral_from_id(request->data.cmd_data.periph_id);
+    peripheral_t *periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
-    parameter_t *param = get_parameter_from_id(periph, request->data.cmd_data.param_id);
+    parameter_t *param = get_parameter_from_id(periph, request->cmd_data.param_id);
 
     /** return lookup success **/
     return (param == NULL ? STATUS_ERR_INVALID_ARG : STATUS_OK);
@@ -344,14 +344,14 @@ static status_t handle_get_request(cmd_request_t *request, cmd_rsp_t *response)
     peripheral_t *periph;
 
     /** load the peripheral/parameter objects **/
-    periph = get_peripheral_from_id(request->data.cmd_data.periph_id);
+    periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
     if (periph == NULL) {
         pm_create_error_response(PM_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
         return PM_ERR_INVALID_PERIPH_ID;
     }
 
-    param = get_parameter_from_id(periph, request->data.cmd_data.param_id);
+    param = get_parameter_from_id(periph, request->cmd_data.param_id);
 
     if (param == NULL) {
         pm_create_error_response(PM_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
@@ -423,16 +423,16 @@ static status_t handle_set_request(cmd_request_t *request, cmd_rsp_t *response)
     status_t cmd_status;
     parameter_t *param;
     peripheral_t *periph;
-    periph_cmd_t *cmd = &request->data.cmd_data;
+    periph_cmd_t *cmd = &request->cmd_data;
     /** load the peripheral/parameter objects **/
-    periph = get_peripheral_from_id(request->data.cmd_data.periph_id);
+    periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
     if (periph == NULL) {
         pm_create_error_response(PM_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
         return PM_ERR_INVALID_PERIPH_ID;
     }
 
-    param = get_parameter_from_id(periph, request->data.cmd_data.param_id);
+    param = get_parameter_from_id(periph, request->cmd_data.param_id);
 
     if (param == NULL) {
         pm_create_error_response(PM_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
@@ -444,9 +444,8 @@ static status_t handle_set_request(cmd_request_t *request, cmd_rsp_t *response)
         return PM_ERR_INVALID_ARG;
     }
 
-    if (request->data.cmd_data.data_t != DATATYPE_STRING
-        && !set_within_limits(&request->data.cmd_data, param))
-    {
+    if (request->cmd_data.data_t != DATATYPE_STRING
+        && !set_within_limits(&request->cmd_data, param)) {
         pm_create_error_response(PM_ERR_SET_OUT_OF_BOUNDS, "Value greater than max", response);
     }
 
@@ -488,14 +487,14 @@ static status_t handle_invoke_request(cmd_request_t *request, cmd_rsp_t *respons
     parameter_t *param;
     peripheral_t *periph;
     /** load the peripheral/parameter objects **/
-    periph = get_peripheral_from_id(request->data.cmd_data.periph_id);
+    periph = get_peripheral_from_id(request->cmd_data.periph_id);
 
     if (periph == NULL) {
         pm_create_error_response(PM_ERR_INVALID_PERIPH_ID, "Invalid Peripheral Id", response);
         return PM_ERR_INVALID_PERIPH_ID;
     }
 
-    param = get_parameter_from_id(periph, request->data.cmd_data.param_id);
+    param = get_parameter_from_id(periph, request->cmd_data.param_id);
 
     if (param == NULL) {
         pm_create_error_response(PM_ERR_INVALID_PARAM_ID, "Invalid Parameter Id", response);
@@ -525,7 +524,7 @@ static cmd_rsp_t pm_handle_periph_cmd(cmd_request_t *request)
     status_t status = STATUS_OK;
     status_t cmd_status = STATUS_OK;
 
-    periph_cmd_t cmd = request->data.cmd_data;
+    periph_cmd_t cmd = request->cmd_data;
 
     cmd_rsp_t command_response = {0};
 
@@ -598,13 +597,6 @@ static void pm_command_task(void *args)
         /** process stream - in development **/
         else if (incomming.cmd_type == REQ_PKT_TYPE_STREAM)
         {
-#ifdef CONFIG_ENABLE_STREAM
-            outgoing = pm_process_stream(&incomming);
-#else
-            pm_create_error_response(0, "Stream not supported", &outgoing);
-            outgoing.rsp_uid = incomming.cmd_uid;
-#endif
-        } else {
             pm_create_error_response(0, "Invalid command type", &outgoing);
             outgoing.rsp_uid = incomming.cmd_uid;
         }
