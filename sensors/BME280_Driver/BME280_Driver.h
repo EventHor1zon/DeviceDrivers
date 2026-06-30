@@ -15,7 +15,7 @@
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 /** PM structures **/
-#include "PeripheralManagerAPI.h"
+#include "DeviceRegistryAPI.h"
 #define bm_param_len 12
 const parameter_t bm_param_map[bm_param_len];
 const peripheral_t bme_peripheral_template;

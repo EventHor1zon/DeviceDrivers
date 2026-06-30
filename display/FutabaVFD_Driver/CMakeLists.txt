@@ -4,5 +4,5 @@ set(srcs
 
 
 idf_component_register(SRCS "${srcs}"
-                    REQUIRES "driver" "GenericCommsDriver" "Utils" "PeripheralManager"
+                    REQUIRES "driver" "GenericCommsDriver" "Utils" "DeviceRegistry"
                     )

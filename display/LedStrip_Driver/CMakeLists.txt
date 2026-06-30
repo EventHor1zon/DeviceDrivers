@@ -5,5 +5,5 @@ set(srcs
 
 idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS "inc/"
-                    REQUIRES "PeripheralManager" "driver" "Utils"
+                    REQUIRES "DeviceRegistry" "driver" "Utils"
 )

@@ -48,7 +48,7 @@ LSM_DriverHandle_t *device = NULL;
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
-#include "PeripheralManagerAPI.h"
+#include "DeviceRegistryAPI.h"
 
 const parameter_t lsm_parameter_map[lsm_param_map_len] = {
     {"Gyro X", 1, &LSM_getGyroX, NULL, NULL, DATATYPE_FLOAT, 0, (GET_FLAG | STREAM_FLAG)},

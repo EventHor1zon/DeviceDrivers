@@ -1,5 +1,5 @@
 /****************************************
- * \file     PeripheralManagerAPI.h
+ * \file     DeviceRegistryAPI.h
  * \brief    Contains command api struct definitions
  * \date     Sept 2020
  * \author   RJAM
@@ -193,7 +193,7 @@ typedef enum cmd_type {
 } cmd_type_t;
 
 /**<
- *      These are responses given by the PeripheralManager Task
+ *      These are responses given by the DeviceRegistry Task
  *
  *      device_info_rsp_t - response to device_info_req
  *      peripheral_info_t - response to peripheral_info_req

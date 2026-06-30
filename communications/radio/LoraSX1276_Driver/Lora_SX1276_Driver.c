@@ -56,7 +56,7 @@
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
-#include "PeripheralManagerAPI.h"
+#include "DeviceRegistryAPI.h"
 
 const parameter_t lora_parameter_map[LORA_PERIPH_LEN] = {
 

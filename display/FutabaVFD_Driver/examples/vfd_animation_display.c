@@ -24,7 +24,7 @@
 #include "main.h"
 #include "port/port_log.h"
 // #include "WifiDriver.h"
-#include "PeripheralManager.h"
+#include "DeviceRegistry.h"
 #include "Utilities.h"
 
 void app_main(void)

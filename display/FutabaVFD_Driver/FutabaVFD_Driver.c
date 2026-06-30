@@ -54,7 +54,7 @@ const uint8_t test_char_data[VFD_SEG_WIDTH] = {
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
-#include "PeripheralManager.h"
+#include "DeviceRegistry.h"
 
 const parameter_t vfd_parameter_map[vfd_parameter_len] = {
     {"Character 0",

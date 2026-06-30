@@ -7,9 +7,9 @@
                                                           *********************************************************/
 
 #include "APDS9960_Driver.h"
+#include "DeviceRegistry.h"
 #include "GenericCommsDriver.h"
 #include "LSM_Driver.h"
-#include "PeripheralManager.h"
 #include "Utilities.h"
 #include "WifiDriver.h"
 #include "freertos/FreeRTOS.h"

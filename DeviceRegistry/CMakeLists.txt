@@ -1,5 +1,5 @@
 set(srcs
-    "PeripheralManager.c"   
+    "DeviceRegistry.c"   
     "CommandAPI.c"
 )
 

@@ -6,5 +6,5 @@ set(includes ".")
 
 idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS ${includes}
-                    REQUIRES "driver" "GenericCommsDriver" "Utils" "PeripheralManager"
+                    REQUIRES "driver" "GenericCommsDriver" "Utils" "DeviceRegistry"
         )

@@ -1,8 +1,8 @@
 /****************************************
- * \file     PeripheralManager.h
+ * \file     DeviceRegistry.h
  * \brief    Header file for the Peripheral manager.c
  *
- *   PeripheralManager is one of the main components of ESP_Home system
+ *   DeviceRegistry is one of the main components of ESP_Home system
  *   It acts as a bridge btween the connected peripherals and the API manager
  *   It creates the main command queue and the control task is blocked waiting for
  *   an incomming command from the API manager
@@ -17,7 +17,7 @@
 #define PERIPHERAL_MANAGER_H
 
 /********* Includes ********************/
-#include "PeripheralManagerAPI.h"
+#include "DeviceRegistryAPI.h"
 #include "error_types.h"
 #include "port/driver/include/port_gpio.h"
 #include "port/interfaces/include/port_i2c.h"

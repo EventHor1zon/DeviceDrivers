@@ -9,5 +9,5 @@ set(includes "inc/"
 
 idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS ${includes}
-                    REQUIRES "PeripheralManager" "esp_http_server" "json" "Utils"
+                    REQUIRES "DeviceRegistry" "esp_http_server" "json" "Utils"
 )

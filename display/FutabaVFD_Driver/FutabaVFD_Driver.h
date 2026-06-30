@@ -21,7 +21,7 @@
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
-#include "PeripheralManager.h"
+#include "DeviceRegistry.h"
 #define vfd_parameter_len 15
 const parameter_t vfd_parameter_map[vfd_parameter_len];
 const peripheral_t vfd_periph_template;

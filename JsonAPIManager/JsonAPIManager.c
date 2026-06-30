@@ -60,8 +60,8 @@
 #if CONFIG_ENABLE_STREAM
 #include "StreamComponent.h"
 #endif /* CONFIG_ENABLE_STREAM */
-#include "PeripheralManager.h"
-#include "PeripheralManagerAPI.h"
+#include "DeviceRegistry.h"
+#include "DeviceRegistryAPI.h"
 #include "Utilities.h"
 
 #define DEBUG_MODE 1
@@ -109,7 +109,7 @@ static const httpd_uri_t streamhandler = {
 /****** Static Function Prototypes ***********/
 
 /** \brief - returns a json string response to device info cmd
- *  \param - rsp_data  - data returned from the PeripheralManager
+ *  \param - rsp_data  - data returned from the DeviceRegistry
  *  \param - strbuffer - a buffer to store the json string in
  *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
@@ -120,7 +120,7 @@ static status_t device_info_to_json_string(
     uint16_t buffer_len);
 
 /** \brief - returns a json string resposne to param info cmd
- *  \param - rsp_data  - data returned from the PeripheralManager
+ *  \param - rsp_data  - data returned from the DeviceRegistry
  *  \param - strbuffer - a buffer to store the json string in
  *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
@@ -131,7 +131,7 @@ static status_t param_info_to_json_string(
     uint16_t buffer_len);
 
 /** \brief - returns a json string resposne to periph info cmd
- *  \param - rsp_data  - data returned from the PeripheralManager
+ *  \param - rsp_data  - data returned from the DeviceRegistry
  *  \param - strbuffer - a buffer to store the json string in
  *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
@@ -142,7 +142,7 @@ static status_t periph_info_to_json_string(
     uint16_t buffer_len);
 
 /** \brief - returns a json string resposne to GET cmd
- *  \param - rsp_data  - data returned from the PeripheralManager
+ *  \param - rsp_data  - data returned from the DeviceRegistry
  *  \param - strbuffer - a buffer to store the json string in
  *  \param - buffer_len - length of the storage buffer
  *  \return STATUS_OK or Error
@@ -153,7 +153,7 @@ static status_t get_response_to_json_string(
     uint16_t buffer_len);
 
 /** \brief - returns a json string respone to SET cmd
- *  \param - rsp_data  - data returned from the PeripheralManager
+ *  \param - rsp_data  - data returned from the DeviceRegistry
  *  \param - strbuffer - a buffer to store the json string in
  *  \param - buffer_len - length of the storage buffer
  * \return STATUS_OK or Error

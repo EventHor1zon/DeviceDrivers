@@ -1,5 +1,5 @@
 /***************************************
- * \file      PeripheralManager.c
+ * \file      DeviceRegistry.c
  * \brief     This API mangs the components, and communicates with the
  *            API_Manager.
  * \date     Sept 2020
@@ -7,9 +7,9 @@
  ****************************************/
 
 /********* Includes *******************/
+#include "DeviceRegistry.h"
+#include "DeviceRegistryAPI.h"
 #include "GenericCommsDriver.h"
-#include "PeripheralManager.h"
-#include "PeripheralManagerAPI.h"
 #include "freertos/FreeRTOS.h"
 #include "port/error_types.h"
 #include "port/event.h"

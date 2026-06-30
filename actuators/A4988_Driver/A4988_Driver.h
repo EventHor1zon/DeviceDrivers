@@ -25,7 +25,7 @@
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
-#include "PeripheralManagerAPI.h"
+#include "DeviceRegistryAPI.h"
 #define a4988_param_len 9
 
 const parameter_t a4988_param_map[a4988_param_len];
