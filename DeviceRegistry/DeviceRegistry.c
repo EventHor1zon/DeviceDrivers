@@ -474,7 +474,7 @@ static void dev_reg_command_task(void *args)
     cmd_request_t incomming = {0};
     cmd_rsp_t outgoing = {0};
     log_info(DR_TAG, "Starting PM Task...");
-
+    queuetype_t command_queue = (queuetype_t)args;
     while (command_queue == NULL) {
         /** wait for the command queue if not initialied **/
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -502,102 +502,10 @@ static void dev_reg_command_task(void *args)
 
         outgoing.rsp_args = incomming.rsp_args;
 
-        xQueueSendToBack(incomming.response_queue, &outgoing, DR_QUEUE_SEND_TIMEOUT);
+        port_queue_put(incomming.response_queue, &outgoing, DR_QUEUE_SEND_TIMEOUT);
     }
     /** Here be dragons **/
 }
-
-#ifdef CONFIG_ENABLE_STREAM
-
-static bool dev_reg_is_streamable(uint8_t periph_id, uint8_t param_id)
-{
-    bool is_streamable = false;
-    log_info(DR_TAG, "Checking if streamable");
-    peripheral_t *p = get_peripheral_from_id(periph_id);
-    if (p != NULL) {
-        parameter_t *prm = get_parameter_from_id(p, param_id);
-        if (prm != NULL) {
-            is_streamable = (prm->types & STREAM_FLAG) > 0 ? 1 : 0;
-        } else {
-            log_error(DR_TAG, "Error: Invalid param id");
-        }
-    } else {
-        log_error(DR_TAG, "Error: Invalid peripheral id");
-    }
-
-    return is_streamable;
-}
-
-static cmd_rsp_t dev_reg_process_stream(cmd_request_t *request)
-{
-    /** TODO: Process stream requests - set up the neccesary
-     * buffers & init the stream task.
-     *
-     * Make sure to track when streaming - there will be different types of stream requests -
-     *  start,
-     *  end,
-     *  OK/continue/ping/pong - these should be dealt with by the API Manager
-     *
-     * TODO: Make the stream handle pointer a constant in StreamComponent.h?
-     *       This would give visibility to both PM & AM
-     *       Plus could display the current stream status in the driver handle
-     * TODO: Make a PM function to initialise this stream interface -
-     *          Create then sleep the task.
-     *          Asign the memory for the stream_handle
-     *          When new stream, api manager checks if already streaming
-     *          if not, zeros the struct, then creates a new stream
-     * TODO: If streaming enabled (Set a Def flag) then this function is called from PM init
-     * TODO: Create a stream state machine!!!
-     *       Great opportuniy AND good practice!
-     *
-     **/
-
-    stream_cmd_t scmd = request->data.strm_data;
-    status_t err = STATUS_OK;
-    stream_handle_t *shandle = NULL;
-    uint8_t param_ids[6] = {0};
-
-    log_info(
-        DR_TAG,
-        "Got a stream request rate %u num_params: %u periph_id: %u",
-        scmd.rate,
-        scmd.param_num,
-        scmd.periph_id);
-
-    /** Check the parameters are streamable **/
-    for (uint8_t i = 0; i < scmd.param_num; i++) {
-        log_info("Checking param id %u", scmd.param_ids[i]);
-        if (!dev_reg_is_streamable(scmd.periph_id, scmd.param_ids[i])) {
-            create_error_response(100, "Error: Parameter is not streamable", &response);
-            err = STATUS_ERR_INVALID_RESPONSE;
-        }
-    }
-    /** check rate **/
-    if (err == STATUS_OK && scmd.rate >= STREAM_DRATE_END) {
-        create_error_response(100, "Error: Invalid stream rate", &response);
-        err = STATUS_ERR_INVALID_RESPONSE;
-    }
-
-    if (!err) {
-        memcpy(param_ids, scmd.param_ids, (sizeof(uint8_t) * 6));
-        err = start_new_stream(scmd.param_num, scmd.rate, scmd.periph_id, param_ids);
-        if (err) {
-            create_error_response(100, "Error creating stream", &response);
-            err = STATUS_ERR_INVALID_RESPONSE;
-        }
-    }
-
-    if (!err) {
-        dev_reg_craft_ok_response(&response);
-    }
-
-    cmd_rsp_t cmd_rsp = {0};
-    cmd_rsp.rsp_uid = request->cmd_uid;
-    cmd_rsp.rsp_data = response;
-
-    return cmd_rsp;
-}
-#endif
 
 #ifdef CONFIG_USE_EVENTS
 
@@ -811,14 +719,14 @@ status_t device_registry_init(dev_reg_init_t *init_data)
         initStatus = STATUS_ERR_INVALID_ARG;
     }
 
-    if (command_queue) {
-        if (xTaskCreatePinnedToCore(
+    if (init_data->command_queue) {
+        if (port_task_create(
                 dev_reg_command_task,
                 "dev_reg_command_task",
                 5012,
                 NULL,
                 6,
-                NULL,
+                init_data->command_queue,
                 0)
             != pdTRUE)
         {

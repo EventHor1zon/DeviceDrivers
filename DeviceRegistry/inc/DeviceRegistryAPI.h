@@ -369,8 +369,7 @@ typedef struct parameter {
 
 /** \brief Peripheral type struct. Peripheral manager
  *         keeps a master list of these
- *
- * **/
+ **/
 typedef struct peripheral {
     char peripheral_name[32];
     handle_t handle;

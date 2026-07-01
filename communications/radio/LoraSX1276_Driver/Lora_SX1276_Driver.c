@@ -819,87 +819,86 @@ SX1276_DEV sx1276_init(SX1276_DEV dev_handle, sx1276_init_t *init)
     if (err != STATUS_OK) {
         log_error(LORA_TAG, "Error adding device to the bus!");
     }
-}
 
 /** create the device handle **/
 #ifdef CONFIG_DRIVERS_USE_HEAP
-if (!err) {
-    SX1276_DEV dev_handle = (sx1276_driver_t *)
-        heap_caps_calloc(1, sizeof(sx1276_driver_t), MALLOC_CAP_DEFAULT);
-    if (dev_handle == NULL) {
-        log_error(LORA_TAG, "Error allocating memory for driver handle!");
-        err = STATUS_ERR_NO_MEM;
+    if (!err) {
+        SX1276_DEV dev_handle = (sx1276_driver_t *)
+            heap_caps_calloc(1, sizeof(sx1276_driver_t), MALLOC_CAP_DEFAULT);
+        if (dev_handle == NULL) {
+            log_error(LORA_TAG, "Error allocating memory for driver handle!");
+            err = STATUS_ERR_NO_MEM;
+        }
     }
-}
 #else
-memset(dev_handle, 0, sizeof(sx1276_driver_t));
+    memset(dev_handle, 0, sizeof(sx1276_driver_t));
 #endif
 
-if (!err) {
-    dev_handle->cs_pin = init->cs_pin;
-    dev_handle->rst_pin = init->rst_pin;
-    dev_handle->spi_handle = spi_handle;
-    dev_handle->irq_pin = init->irq_pin;
-    /** initialise the registers to their reset defaults **/
-    memcpy(&dev_handle->registers, &resetDefaults, sizeof(Lora_Register_Map_t));
-}
-
-if (!err && dev_handle->rst_pin > 0) {
-    conf.mode = GPIO_MODE_OUTPUT;
-    conf.pin_bit_mask = (1 << dev_handle->rst_pin);
-    conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    conf.intr_type = GPIO_INTR_DISABLE;
-
-    err = gpio_config(&conf);
-}
-
-/** configure the interrupt pin **/
-if (!err && dev_handle->irq_pin > 0) {
-    conf.mode = GPIO_MODE_INPUT;
-    conf.pin_bit_mask = (1 << dev_handle->irq_pin);
-    conf.pull_up_en = GPIO_PULLUP_ENABLE;
-    conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    conf.intr_type = GPIO_INTR_NEGEDGE;
-
-    err = gpio_config(&conf);
-
     if (!err) {
-        err = gpio_isr_handler_add(init->irq_pin, (gpio_isr_t)irq_handler, (void *)dev_handle);
+        dev_handle->cs_pin = init->cs_pin;
+        dev_handle->rst_pin = init->rst_pin;
+        dev_handle->spi_handle = spi_handle;
+        dev_handle->irq_pin = init->irq_pin;
+        /** initialise the registers to their reset defaults **/
+        memcpy(&dev_handle->registers, &resetDefaults, sizeof(Lora_Register_Map_t));
+    }
+
+    if (!err && dev_handle->rst_pin > 0) {
+        conf.mode = GPIO_MODE_OUTPUT;
+        conf.pin_bit_mask = (1 << dev_handle->rst_pin);
+        conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        conf.intr_type = GPIO_INTR_DISABLE;
+
+        err = gpio_config(&conf);
+    }
+
+    /** configure the interrupt pin **/
+    if (!err && dev_handle->irq_pin > 0) {
+        conf.mode = GPIO_MODE_INPUT;
+        conf.pin_bit_mask = (1 << dev_handle->irq_pin);
+        conf.pull_up_en = GPIO_PULLUP_ENABLE;
+        conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        conf.intr_type = GPIO_INTR_NEGEDGE;
+
+        err = gpio_config(&conf);
+
+        if (!err) {
+            err = gpio_isr_handler_add(init->irq_pin, (gpio_isr_t)irq_handler, (void *)dev_handle);
+        }
+
+        if (!err) {
+            log_info(LORA_TAG, "ISR Pin enabled");
+        }
+    }
+
+    /** start the driver task **/
+    // if(!err && xTaskCreate(sx1276_driver_task, "lora_driver_task", 5012, (void *)dev_handle, 3,
+    // &t_handle) != pdTRUE) {
+    //     err = STATUS_ERR_NO_MEM;
+    //     log_error(LORA_TAG, "Error starting driver task [%u]", err);
+    // }
+
+    /** reset the device **/
+    if (!err) {
+        reset_device(dev_handle);
+        // vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     if (!err) {
-        log_info(LORA_TAG, "ISR Pin enabled");
-    }
-}
-
-/** start the driver task **/
-// if(!err && xTaskCreate(sx1276_driver_task, "lora_driver_task", 5012, (void *)dev_handle, 3,
-// &t_handle) != pdTRUE) {
-//     err = STATUS_ERR_NO_MEM;
-//     log_error(LORA_TAG, "Error starting driver task [%u]", err);
-// }
-
-/** reset the device **/
-if (!err) {
-    reset_device(dev_handle);
-    // vTaskDelay(pdMS_TO_TICKS(100));
-}
-
-if (!err) {
-    log_info(LORA_TAG, "Succesfully intialised SX1276 Device!");
-    vTaskDelay(pdMS_TO_TICKS(10));
-    //        sx_setup_lora(dev_handle);
-} else {
-    log_info(LORA_TAG, "Failed to intialise SX1276 Device! :( [%u]", err);
+        log_info(LORA_TAG, "Succesfully intialised SX1276 Device!");
+        vTaskDelay(pdMS_TO_TICKS(10));
+        //        sx_setup_lora(dev_handle);
+    } else {
+        log_info(LORA_TAG, "Failed to intialise SX1276 Device! :( [%u]", err);
 #ifdef CONFIG_DRIVERS_USE_HEAP
-    if (dev_handle != NULL) {
-        heap_caps_free(dev_handle);
-    }
+        if (dev_handle != NULL) {
+            heap_caps_free(dev_handle);
+        }
 #endif
-}
+    }
 
-return dev_handle;
+    return dev_handle;
 }
 
 /** lora getters / setters

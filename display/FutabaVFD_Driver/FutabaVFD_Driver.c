@@ -12,10 +12,7 @@
 /********* Includes *******************/
 
 #include "FutabaVFD_Driver.h"
-#include "GenericCommsDriver.h"
 #include "Utilities.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "port/error_types.h"
 #include "port/interfaces/spi.h"
 #include "port/port_log.h"
