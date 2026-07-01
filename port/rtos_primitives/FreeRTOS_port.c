@@ -1,16 +1,18 @@
 /**
- *    @file    port_rtos.c
+ *    @file    FreeRTOS_port.c
  *
- *    @brief    header file for port_rtos
- *
- *
+ *    @brief   The FreeRTOS implentation of the port file
  *
  *    @author    RJAM
- *    @created   Fri 12 Jun 00:44:40 BST 2026
+ *    @created   Wed 30 Jun 00:44:40 BST 2026
  */
 
 /** Includes **/
+#include "FreeRTOS.h"
 #include "include/port_rtos.h"
+#include "queue.h"
+#include "semphr.h"
+#include "task.h"
 /** Private Data **/
 
 /** Function Prototypes **/
@@ -21,7 +23,7 @@
 
 /** Public Functions **/
 
-status_t __attribute__((weak)) port_lock_resource(locktype_t lock, uint32_t timeout)
+status_t port_lock_resource(locktype_t lock, uint32_t timeout)
 {
     return STATUS_NOT_IMPLEMENTED;
 }
@@ -65,5 +67,3 @@ tasktype_t __attribute__((weak)) port_task_create(
 {
     ;
 }
-
-/** END **/
