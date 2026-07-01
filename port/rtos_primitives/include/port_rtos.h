@@ -73,6 +73,20 @@ status_t port_queue_get_len(queuetype_t queue, uint32_t *const len);
  */
 status_t port_task_notify(tasktype_t task, const uint32_t notify_value, const uint32_t notify_type);
 
+/** @brief Dispatch a message to a task
+ *         For multi-option processing, eg.
+ *  @param task [in] void pointer to task handle
+ *  @param msg [in] message value to send
+ *  @param length [in|out] length of message to send
+ *         @ exit: length sent
+ *  @return status_t status
+ */
+status_t port_task_dispatch_message(
+    tasktype_t task,
+    const void *const msg,
+    uint32_t *const length,
+    const uint32_t timeout);
+
 tasktype_t port_task_create(
     task_prototype_t task,
     const char *taskname,

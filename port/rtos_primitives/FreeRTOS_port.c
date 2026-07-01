@@ -50,13 +50,21 @@ status_t __attribute__((weak)) port_queue_get_len(queuetype_t queue, uint32_t *c
     return STATUS_NOT_IMPLEMENTED;
 }
 
-status_t __attribute__((weak))
-port_task_notify(tasktype_t task, const uint32_t notify_value, const uint32_t notify_type)
+status_t port_task_notify(tasktype_t task, const uint32_t notify_value, const uint32_t notify_type)
+{
+    return xTaskNotify(task, notify_value, notify_type);
+}
+
+status_t port_task_dispatch_message(
+    tasktype_t task,
+    const void *const msg,
+    uint32_t *const length,
+    const uint32_t timeout)
 {
     return STATUS_NOT_IMPLEMENTED;
 }
 
-tasktype_t __attribute__((weak)) port_task_create(
+tasktype_t port_task_create(
     task_prototype_t task,
     const char *taskname,
     const uint32_t stacksize,
@@ -65,5 +73,5 @@ tasktype_t __attribute__((weak)) port_task_create(
     const uint32_t *task_memory,
     const void *task_control)
 {
-    ;
+    return xTaskCreateStatic(task, taskname, stacksize, args, priority, task_memory, task_control);
 }
