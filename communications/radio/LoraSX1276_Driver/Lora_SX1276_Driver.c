@@ -42,15 +42,13 @@
 /********* Includes *******************/
 
 #include "Lora_SX1276_Driver.h"
-#include "Utilities.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "port/driver/port_gpio.h"
 #include "port/error_types.h"
-#include "port/interfaces/port_spi.h"
 #include "port/port_log.h"
-#include "port/port_malloc.h"
 #include "port/port_types.h"
+#include "port_gpio.h"
+#include "port_rtos.h"
+#include "port_spi.h"
+#include "utilities.h"
 
 #include <string.h>
 
@@ -254,6 +252,10 @@ const peripheral_t lora_peripheral_template;
 /****** Private Data ******************/
 
 const char *LORA_TAG = "SX1276";
+static stacktype_t queue_stack
+    [CONFIG_QUEUE_COMMAND_LEN * (sizeof(sx_task_message_t) / (stacktype_t / sizeof(uint8_t)))];
+static stacktype_t sx_task_stack[CONFIG_SX_TASK_STACK_SIZE];
+static taskblock_t tcb;
 
 const Lora_Register_Map_t resetDefaults = {
     .regFifo = 0x00,
@@ -778,6 +780,35 @@ static void sx1276_driver_task(void *args)
 
 /****** Global Functions *************/
 
+status_t sx_driver_start(sx_driver_init_t *init)
+{
+    queuetype_t command_queue_handle = port_queue_create(
+        10,
+        sizeof(sx_task_message_t),
+        queue_buffer);
+
+    if (NULL == command_queue_handle) {
+        return STATUS_ERR_NO_MEM;
+    }
+
+    /** start the driver task **/
+    if (port_task_create(
+            sx1276_driver_task,
+            "lora_driver_task",
+            CONFIG_SX_TASK_STACK_SIZE,
+            (void *)command_queue_handle,
+            init->task_priority,
+            sx_task_stack,
+            &tcb[0]);
+        != STATUS_OK)
+    {
+        log_error(LORA_TAG, "Error starting driver task [%u]", err);
+        return STATUS_ERR_NO_MEM;
+    }
+
+    return STATUS_OK;
+}
+
 /**
  *  intitialise the device, assume SPI already init.
  *  Pins for TTGO Lora32 are
@@ -796,29 +827,8 @@ SX1276_DEV sx1276_init(SX1276_DEV dev_handle, sx1276_init_t *init)
 #endif
 {
     status_t err = STATUS_OK;
-    spi_device_handle_t spi_handle;
     gpio_config_t conf = {0};
     TaskHandle_t t_handle = NULL;
-
-    if (!err) {
-        spi_host_device_t dev = init->spi_bus;
-        spi_device_interface_config_t dconf = {0};
-        dconf.address_bits = 0;
-        dconf.clock_speed_hz = 500000;
-        dconf.command_bits = 0;
-        dconf.cs_ena_posttrans = 0;
-        dconf.cs_ena_pretrans = 0;
-        dconf.dummy_bits = 0;
-        dconf.duty_cycle_pos = 128;
-        dconf.mode = 0;
-        dconf.queue_size = 4;
-        dconf.spics_io_num = init->cs_pin;
-        err = spi_init_device(dev, &dconf, &spi_handle);
-    }
-
-    if (err != STATUS_OK) {
-        log_error(LORA_TAG, "Error adding device to the bus!");
-    }
 
 /** create the device handle **/
 #ifdef CONFIG_DRIVERS_USE_HEAP
@@ -837,47 +847,11 @@ SX1276_DEV sx1276_init(SX1276_DEV dev_handle, sx1276_init_t *init)
     if (!err) {
         dev_handle->cs_pin = init->cs_pin;
         dev_handle->rst_pin = init->rst_pin;
-        dev_handle->spi_handle = spi_handle;
+        dev_handle->spi_handle = init->spi_device;
         dev_handle->irq_pin = init->irq_pin;
         /** initialise the registers to their reset defaults **/
         memcpy(&dev_handle->registers, &resetDefaults, sizeof(Lora_Register_Map_t));
     }
-
-    if (!err && dev_handle->rst_pin > 0) {
-        conf.mode = GPIO_MODE_OUTPUT;
-        conf.pin_bit_mask = (1 << dev_handle->rst_pin);
-        conf.pull_up_en = GPIO_PULLUP_DISABLE;
-        conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-        conf.intr_type = GPIO_INTR_DISABLE;
-
-        err = gpio_config(&conf);
-    }
-
-    /** configure the interrupt pin **/
-    if (!err && dev_handle->irq_pin > 0) {
-        conf.mode = GPIO_MODE_INPUT;
-        conf.pin_bit_mask = (1 << dev_handle->irq_pin);
-        conf.pull_up_en = GPIO_PULLUP_ENABLE;
-        conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-        conf.intr_type = GPIO_INTR_NEGEDGE;
-
-        err = gpio_config(&conf);
-
-        if (!err) {
-            err = gpio_isr_handler_add(init->irq_pin, (gpio_isr_t)irq_handler, (void *)dev_handle);
-        }
-
-        if (!err) {
-            log_info(LORA_TAG, "ISR Pin enabled");
-        }
-    }
-
-    /** start the driver task **/
-    // if(!err && xTaskCreate(sx1276_driver_task, "lora_driver_task", 5012, (void *)dev_handle, 3,
-    // &t_handle) != pdTRUE) {
-    //     err = STATUS_ERR_NO_MEM;
-    //     log_error(LORA_TAG, "Error starting driver task [%u]", err);
-    // }
 
     /** reset the device **/
     if (!err) {

@@ -20,9 +20,14 @@
 
 /** Typedefs **/
 
+typedef uint32_t stacktype_t;
 typedef void *locktype_t;
 typedef void *queuetype_t;
 typedef void *tasktype_t;
+typedef uint32_t taskblock_t[32]; /** this is a placeholder value which should be
+                                      substituted for the size of the TCB in the
+                                      rtos of choice
+                                    **/
 typedef void (*task_prototype_t)(void *);
 
 /** Function Declarations **/
@@ -39,6 +44,11 @@ status_t port_lock_resource(locktype_t lock, uint32_t timeout);
  *  @return status_t status
  */
 status_t port_unlock_resource(locktype_t lock);
+
+/**
+ *  @brief creates a static queue
+ **/
+queuetype_t port_queue_create(uint32_t num_items, uint32_t item_size, stacktype_t queue_buffer);
 
 /** @brief get an item from the queue
  *         the user is responsible for correct item sizing

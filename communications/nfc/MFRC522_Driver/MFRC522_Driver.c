@@ -32,14 +32,12 @@
  ****************************************/
 
 /********* Includes *******************/
-#include "GenericCommsDriver.h"
 #include "MFRC522_Driver.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "port/error_types.h"
 #include "port/interfaces/include/port_spi.h"
 #include "port/port_log.h"
 #include "port/port_types.h"
+#include "port_rtos.h"
 #include "utilities.h"
 
 #include <string.h>

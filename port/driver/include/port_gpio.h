@@ -20,6 +20,10 @@
 /** Defines **/
 
 /** Typedefs **/
+typedef uint32_t gpio_port_t;
+typedef uint32_t gpio_pin_t;
+
+typedef uint32_t gpio_port_pin_t;
 
 /** Function Declarations **/
 
@@ -52,6 +56,13 @@ status_t gpio_set_open_drain(const uint32_t gpio_port, const uint32_t gpio_pin);
  */
 status_t gpio_set_push_pull(const uint32_t gpio_port, const uint32_t gpio_pin);
 
+/** @brief set gpio to high impedence (High Z)
+ *  @param gpio_port [in] GPIO port index (zero if not required)
+ *  @param gpio_pin [in]  GPIO pin number
+ *  @return status_t status
+ */
+status_t gpio_set_high_impedance(const uint32_t gpio_port, const uint32_t gpio_pin);
+
 /** @brief set the gpio direction
  *  @param gpio_port [in] GPIO port index (zero if not required)
  *  @param gpio_pin [in]  GPIO pin number
@@ -62,13 +73,6 @@ status_t gpio_set_direction(
     const uint32_t gpio_port,
     const uint32_t gpio_pin,
     const uint32_t direction);
-
-/** @brief set gpio to high impedence (High Z)
- *  @param gpio_port [in] GPIO port index (zero if not required)
- *  @param gpio_pin [in]  GPIO pin number
- *  @return status_t status
- */
-status_t gpio_set_high_impedance(const uint32_t gpio_port, const uint32_t gpio_pin);
 
 /** @brief Get the gpio input level
  *  @param gpio_port [in] GPIO port index (zero if not required)

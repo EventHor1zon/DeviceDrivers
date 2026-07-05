@@ -119,7 +119,7 @@ static void cbuffer_write_ll(CBuff handle, void *data, uint32_t len)
         dest += buffer_write_bytes_until_end(handle);
     }
 
-    _memcpy(handle->write_ptr, dest, len);
+    __memcpy(handle->write_ptr, dest, len);
     handle->write_ptr += len;
 }
 
@@ -133,14 +133,14 @@ static void cbuffer_read_ll(CBuff handle, void *data, uint32_t len)
     uint8_t *dest = data;
     if (len > buffer_read_bytes_until_end(handle)) {
         /** write the first chunk into the data buffer */
-        _memcpy(dest, handle->read_ptr, buffer_read_bytes_until_end(handle));
+        __memcpy(dest, handle->read_ptr, buffer_read_bytes_until_end(handle));
         /** update the pointers and length for second read */
         handle->read_ptr = handle->buffer_start;
         len -= buffer_read_bytes_until_end(handle);
         dest += buffer_read_bytes_until_end(handle);
     }
 
-    _memcpy(dest, handle->read_ptr, len);
+    __memcpy(dest, handle->read_ptr, len);
     handle->read_ptr += len;
 }
 
@@ -269,7 +269,6 @@ status_t cbuffer_set_event_mask(CBuff handle, uint8_t event_mask)
         handle->use_events = true;
     } else {
         handle->use_events = false;
-        s
     }
     return STATUS_OK;
 }

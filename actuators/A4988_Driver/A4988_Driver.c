@@ -8,23 +8,23 @@
 
 /********* Includes *******************/
 #include "A4988_Driver.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
-#include "freertos/timers.h"
 #include "port/error_types.h"
 #include "port/port_log.h"
 #include "port/port_malloc.h"
 #include "port/port_types.h"
+#include "port/rtos_primitives/include/port_rtos.h"
 #include "string.h"
 
 const char *DEV_TAG = "A4988 Driver";
 /** keep the task handle static as we only instatiate it
  * once
  */
-static TaskHandle_t a4988_task_handle = NULL;
+static task_type_t a4988_task_handle = NULL;
 static QueueHandle_t a4988_cmd_queue = NULL;
+static uint8_t driver_running = 0;
 static uint8_t num_devices = 0;
+stacktype_t task_stack[5012];
+stacktype_t queue_stack[1024];
 
 #ifdef CONFIG_USE_PERIPH_MANAGER
 
@@ -132,7 +132,7 @@ static void a4988_driver_task(void *args)
     BaseType_t rx = pdFALSE;
 
     while (1) {
-        rx = xQueueReceive(a4988_cmd_queue, &msg, portMAX_DELAY);
+        rx = port_queue_get(a4988_cmd_queue, &msg, portMAX_DELAY);
 
         if (rx == pdTRUE) {
             /** retrieve the device handle **/
@@ -179,6 +179,38 @@ static void a4988_driver_task(void *args)
 /****** Global Data *******************/
 
 /****** Global Functions *************/
+
+status_t a4988_start_driver(
+    uint32_t task_priority,
+    stacktype_t *task_buffer,
+    uint32_t stack_size,
+    void *const tcb)
+{
+    /** Create the task and command queue - this should only be called once **/
+    if (!err && a4988_task_handle == NULL) {
+        if (port_task_create(
+                a4988_driver_task,
+                "a4988_driver_task",
+                stack_size,
+                NULL,
+                task_priority,
+                task_buffer,
+                tcb)
+            != STATUS_OK)
+        {
+            log_error(DEV_TAG, "Error starting dev task!");
+            err = STATUS_ERR_NO_MEM;
+        }
+    }
+
+    if (!err && a4988_cmd_queue == NULL) {
+        a4988_cmd_queue = port_queue_create(sizeof(a4988_cmd_t), A4988_CONFIG_QUEUE_LEN);
+        if (a4988_cmd_queue == NULL) {
+            log_error(DEV_TAG, "Error creating queue");
+            err = STATUS_ERR_NO_MEM;
+        }
+    }
+}
 
 #ifdef CONFIG_DRIVERS_USE_HEAP
 A4988_DEV a4988_init(a4988_init_t *init)
@@ -287,96 +319,6 @@ A4988_DEV a4988_init(A4988_DEV dev, a4988_init_t *init)
                     dev->step_size = 0;
                 }
             }
-        }
-    }
-
-    /** Create the task and command queue - this should only be called once **/
-    if (!err && a4988_task_handle == NULL) {
-        if (xTaskCreate(a4988_driver_task, "a4988_driver_task", 5012, NULL, 3, &a4988_task_handle)
-            != pdTRUE)
-        {
-            log_error(DEV_TAG, "Error starting dev task!");
-            err = STATUS_ERR_NO_MEM;
-        }
-    }
-
-    if (!err && a4988_cmd_queue == NULL) {
-        a4988_cmd_queue = xQueueCreate(sizeof(a4988_cmd_t), A4988_CONFIG_QUEUE_LEN);
-        if (a4988_cmd_queue == NULL) {
-            log_error(DEV_TAG, "Error creating queue");
-            err = STATUS_ERR_NO_MEM;
-        }
-    }
-
-    /** Create the step timer **/
-    if (!err) {
-        timer = xTimerCreate(
-            "step_tmr",
-            pdMS_TO_TICKS(dev->step_wait),
-            true,
-            (void *)dev,
-            a4988_step_timer_callback);
-        if (timer == NULL) {
-            log_error(DEV_TAG, "Error creating timer!");
-            err = STATUS_ERR_NO_MEM;
-        } else {
-            dev->step_timer = timer;
-        }
-    }
-
-    /** Create the pulse timer **/
-    timer_config_t tmr = {
-        .counter_en = false,
-        .alarm_en = true,
-        .auto_reload = true,
-        .counter_dir = TIMER_COUNT_DOWN,
-        .divider = A4988_CONFIG_PTMR_DIV,
-        .intr_type = TIMER_INTR_LEVEL,
-    };
-
-    if (!err) {
-        /** use a hack to select a timer (0,1)(0,1) from the pool depending on
-         *  device index. Using a hardware timer does limit the max num of drivers
-         *  to 4.
-         *  dev 0: (0)(0)
-         *  dev 1: (0)(1)
-         *  dev 2: (1)(0)
-         *  dev 3: (1)(1)
-         **/
-
-        /** this block -
-         *  - inits timer
-         *  - enables timer interrupt
-         *  - sets the counter value to default
-         *  - sets the isr callback
-         *  - sets the alarm value (we count down to 0)
-         **/
-        if (timer_init(TIMER_GRP_FROM_INDEX(num_devices), TIMER_ID_FROM_INDEX(num_devices), &tmr)
-                != STATUS_OK
-            || timer_enable_intr(
-                   TIMER_GRP_FROM_INDEX(num_devices),
-                   TIMER_ID_FROM_INDEX(num_devices))
-                   != STATUS_OK
-            || timer_set_counter_value(
-                   TIMER_GRP_FROM_INDEX(num_devices),
-                   TIMER_ID_FROM_INDEX(num_devices),
-                   A4988_CONFIG_PULSE_LEN)
-                   != STATUS_OK
-            || timer_isr_callback_add(
-                   TIMER_GRP_FROM_INDEX(num_devices),
-                   TIMER_ID_FROM_INDEX(num_devices),
-                   pulse_timer_callback,
-                   dev,
-                   STATUS_INTR_FLAG_LEVEL5)
-                   != STATUS_OK
-            || timer_set_alarm_value(
-                   TIMER_GRP_FROM_INDEX(num_devices),
-                   TIMER_ID_FROM_INDEX(num_devices),
-                   0)
-                   != STATUS_OK)
-        {
-            log_error(DEV_TAG, "Error configuring timer");
-            err = STATUS_ERR_INVALID_RESPONSE;
         }
     }
 
